@@ -1,29 +1,33 @@
 # verzly/tauri-release
 
-`verzly/tauri-release` is a release orchestrator for Tauri applications. It builds final desktop and mobile artifacts in disposable Podman/Docker build sessions, then copies only the files that should be published into `dist/<version>/`.
+`verzly/tauri-release` is a release orchestrator for Tauri applications. It builds final desktop and mobile artifacts in disposable Podman/Docker sessions, then copies only publishable files into `dist/<version>/`.
 
-It is designed for projects where `src-tauri/target`, `src-tauri/gen/android/app/build`, Gradle outputs, frontend dependencies, Android intermediates, and other generated files should not keep growing inside the source tree.
+It is designed for projects where `src-tauri/target`, `src-tauri/gen/android/app/build`, Gradle output, frontend dependencies, platform SDK output, and other generated files should not keep growing inside the source tree.
 
 It provides an integrated release flow with built-in support for:
-- **Linux desktop bundles** through containerized Tauri builds
-- **Android APK/AAB builds** through containerized Android SDK/NDK builds
-- **Windows, macOS, and iOS release slots** for native host or CI runner builds
-- **Artifact whitelisting** so only installers, packages, signatures, metadata, and checksums are kept
-- **SHA-256 checksums** for every collected release file
-- **Release manifest generation** for predictable release publishing
 
-Build inside a disposable workspace, keep only the executable artifacts, and let the container session remove everything else.
+- **Linux desktop bundles** through a host-aware Podman/Docker strategy
+- **Android APK/AAB builds** through a containerized Android SDK/NDK strategy
+- **Windows, macOS, and iOS targets** through the same Podman/Docker orchestration model
+- **Native-host preference** when the current host already matches the target platform
+- **Artifact whitelisting** so only installers, packages, signatures, metadata, and checksums are kept
+- **SHA-256 checksums** for collected release files
+- **Release manifest generation** for predictable publishing
+
+Build inside a disposable workspace, keep only executable artifacts, and let the container session remove everything else.
 
 - [How it works](#how-it-works)
+  - [Build strategy](#build-strategy)
   - [Container builds](#container-builds)
   - [Native host builds](#native-host-builds)
   - [Cleanup](#cleanup)
 - [Get started](#get-started)
-  - [Install](#get-started)
+  - [Install](#install)
   - [Create config](#create-config)
-  - [Upgrade](#up-to-date)
+  - [Upgrade](#upgrade)
 - [Usage](#usage)
   - [Build Linux and Android](#build-linux-and-android)
+  - [Build Windows, macOS, and iOS](#build-windows-macos-and-ios)
   - [Monorepo projects](#monorepo-projects)
   - [Android APK and AAB](#android-apk-and-aab)
   - [Artifact collection](#artifact-collection)
@@ -34,13 +38,13 @@ Build inside a disposable workspace, keep only the executable artifacts, and let
 - [Known issues](#known-issues)
 - [Contributing](#contributing)
 
-Read on to understand why `verzly/tauri-release` exists and how the build isolation works. Or jump straight to [Get started](#get-started) for installation and first build steps.
+Read on to understand why `verzly/tauri-release` exists and how build isolation works. Or jump straight to [Get started](#get-started) for installation and first build steps.
 
 ## How it works
 
 Tauri release builds can create a large amount of intermediate output. Desktop builds use Cargo, frontend package managers, and Tauri bundlers. Android builds also generate a Gradle project under `src-tauri/gen/android`, compile native Rust libraries, package APK/AAB files, and keep Gradle intermediates.
 
-`verzly/tauri-release` avoids polluting the working tree by running the expensive build in an isolated workspace:
+`verzly/tauri-release` avoids polluting the working tree by running expensive builds in an isolated workspace:
 
 ```text
 host project  ->  mounted read-only at /src
@@ -51,31 +55,50 @@ host dist     ->  receives only whitelisted files
 
 The source project is treated as input. The release directory is treated as output. Everything else is disposable.
 
+### Build strategy
+
+Each platform has a `strategy` setting:
+
+```toml
+strategy = "auto"       # prefer native host when host matches, otherwise container
+strategy = "container"  # always use Podman/Docker
+strategy = "host-only"  # always run the command on the host
+strategy = "disabled"   # reject the build target
+```
+
+`auto` is the recommended default for desktop-style targets. It respects the current host:
+
+| Target | Linux host | Windows host | macOS host |
+|---|---|---|---|
+| Linux | host | container | container |
+| Windows | container | host | container |
+| macOS | container | container | host |
+| iOS | container | container | host |
+| Android | container by default | container by default | container by default |
+
+This means a Windows host can build Windows artifacts natively without unnecessary Windows cross-compiling through Podman, and a macOS host can build macOS/iOS artifacts natively. On other hosts, the same targets go through the configured container image.
+
 ### Container builds
 
-Linux and Android are the primary container targets.
+All targets can be executed through Podman/Docker when their strategy resolves to `container`.
 
-For Linux, the container image contains the Rust, Node, package-manager, and system dependencies needed by Tauri desktop builds.
-
-For Android, the container image contains the Android SDK, Android NDK, JDK, Rust Android targets, Node, the selected package manager, and Tauri CLI support.
+Linux and Android are the primary portable container targets. Windows, macOS, and iOS also have container slots and image settings so your release infrastructure can provide the required cross-build or remote SDK environment without writing artifacts into the source tree.
 
 The container can reuse a shared cache directory, but generated project files and temporary build outputs stay inside the release session unless they match the artifact whitelist.
 
 ### Native host builds
 
-Windows, macOS, and iOS are represented in the project structure, but they are host-native release targets by default.
+When the current host matches the selected target and the strategy is `auto`, `tauri-release` runs the configured command on the host and then applies the same artifact collection step.
 
-This is intentional. Tauri Windows installers, macOS bundles, signing, notarization, and iOS builds often depend on platform-native SDKs and signing tools. `verzly/tauri-release` gives these targets a consistent release plan and artifact collection path without hiding platform constraints behind fragile cross-build assumptions.
+This avoids unnecessary cross-compiling when it is not needed:
 
-Recommended target strategy:
+```text
+Windows host -> Windows Tauri build runs on host
+macOS host   -> macOS/iOS Tauri build runs on host
+Linux host   -> Linux Tauri build runs on host
+```
 
-| Target | Default strategy | Notes |
-|---|---|---|
-| Linux desktop | Container | AppImage, deb, rpm, or other configured Tauri bundles |
-| Android | Container | APK/AAB with Android SDK/NDK inside the image |
-| Windows | Windows host/runner | MSI, NSIS, EXE, signing |
-| macOS | macOS host/runner | app, dmg, signing, notarization |
-| iOS | macOS host/runner | Xcode/iOS toolchain required |
+You can still force containers with `strategy = "container"`.
 
 ### Cleanup
 
@@ -94,7 +117,9 @@ Special release metadata files such as `latest.json` and `release.json` are also
 > [!IMPORTANT]
 > `verzly/tauri-release` requires Rust and a container engine for containerized targets.
 >
-> Linux and Android builds are intended to run through Podman or Docker. Windows, macOS, and iOS targets require suitable native hosts or CI runners if you enable them.
+> Windows, macOS, and iOS can be container-orchestrated, but the image still has to contain a working platform toolchain for your release flow. With `strategy = "auto"`, matching native hosts are used directly.
+
+### Install
 
 Install from a local checkout during development:
 
@@ -108,6 +133,8 @@ After installation, both command styles are available:
 tauri-release --help
 cargo tauri-release --help
 ```
+
+### Create config
 
 From the root of a Tauri project, create a config file and inspect the plan:
 
@@ -128,14 +155,6 @@ The release files will be written to:
 dist/<version>/
 ```
 
-### Create config
-
-Generate a starter config:
-
-```sh
-tauri-release init
-```
-
 Overwrite an existing config:
 
 ```sh
@@ -148,19 +167,12 @@ Use a custom config path:
 tauri-release init release/tauri-release.toml
 ```
 
-### Up-to-date
+### Upgrade
 
 When the tool is installed from a local checkout, reinstall after pulling updates:
 
 ```sh
 cargo install --path . --force
-```
-
-If the project is published later, install or update it through Cargo in the same way as other Rust binaries:
-
-```sh
-cargo install tauri-release
-cargo install --force tauri-release
 ```
 
 ## Usage
@@ -180,16 +192,51 @@ tauri-release build --android --apk --aab --android-target aarch64
 tauri-release build --linux --android --apk --aab --android-target aarch64
 ```
 
-If no subcommand is given, `build` is used as the default command:
-
-```sh
-tauri-release --linux --android --apk
-```
-
 Preview the resolved release plan without starting containers:
 
 ```sh
 tauri-release plan --linux --android --apk --aab
+```
+
+### Build Windows, macOS, and iOS
+
+The same CLI targets are available for platform-specific releases:
+
+```sh
+tauri-release build --windows
+tauri-release build --macos
+tauri-release build --ios
+```
+
+With `strategy = "auto"`, these use the native host when it matches the target. Otherwise they use the configured container image:
+
+```toml
+[windows]
+enabled = true
+strategy = "auto"
+image = "ghcr.io/your-org/tauri-release-windows:latest"
+
+[macos]
+enabled = true
+strategy = "auto"
+image = "ghcr.io/your-org/tauri-release-macos:latest"
+
+[ios]
+enabled = true
+strategy = "auto"
+image = "ghcr.io/your-org/tauri-release-ios:latest"
+```
+
+Force Podman/Docker even on a matching host:
+
+```toml
+strategy = "container"
+```
+
+Force native host execution only:
+
+```toml
+strategy = "host-only"
 ```
 
 ### Monorepo projects
@@ -212,7 +259,7 @@ tauri-release build --project-dir apps/desktop --linux
 tauri-release build --project-dir apps/mobile --android --apk --aab --android-target aarch64
 ```
 
-You can also keep separate config files:
+You can also keep separate config files in `examples/` or in your own release directory:
 
 ```sh
 tauri-release build --config examples/nutrino-desktop.toml
@@ -239,189 +286,75 @@ Build both APK and AAB:
 tauri-release build --android --apk --aab --android-target aarch64
 ```
 
-Build multiple Android targets:
-
-```sh
-tauri-release build --android --apk --android-target aarch64 --android-target armv7
-```
-
-Split Android packages per ABI:
-
-```sh
-tauri-release build --android --apk --split-per-abi
-```
-
 ### Artifact collection
 
-Collected release files are copied into the output directory and normalized. By default, `verzly/tauri-release` keeps executable packages, installers, update metadata, signatures, and JSON release metadata.
-
-The default artifact extensions are:
-
-```text
-AppImage, deb, rpm, exe, msi, zip, dmg, apk, aab, ipa, sig, json
-```
-
-The default special files are:
-
-```text
-latest.json
-release.json
-```
-
-Configure this in `tauri-release.toml`:
+Artifacts are collected by extension and explicit file names:
 
 ```toml
 [artifacts]
-include_extensions = ["AppImage", "deb", "rpm", "apk", "aab", "sig", "json"]
+include_extensions = ["AppImage", "deb", "rpm", "exe", "msi", "zip", "dmg", "apk", "aab", "ipa", "sig", "json"]
 include_files = ["latest.json", "release.json"]
 keep_relative_paths = false
 ```
 
 ### Checksums
 
-Every collected file receives a `.sha256` file when checksum generation is enabled.
+SHA-256 files are generated next to collected artifacts by default:
 
-Verify on Linux:
-
-```sh
-sha256sum -c <filename>.sha256
-```
-
-Verify on macOS:
-
-```sh
-shasum -a 256 -c <filename>.sha256
-```
-
-Verify on Windows PowerShell:
-
-```pwsh
-(Get-FileHash <filename> -Algorithm SHA256).Hash -eq (Get-Content <filename>.sha256).Split(" ")[0]
+```toml
+[output]
+sha256 = true
 ```
 
 ### Cache
 
-Clear the shared cache:
+The default cache directory is platform-specific under the user cache directory. Override it per project:
 
-```sh
-tauri-release clean-cache
+```toml
+[container]
+cache_dir = ".cache/tauri-release"
 ```
 
-Use a custom cache directory:
+Or per command:
 
 ```sh
-tauri-release clean-cache --cache-dir /path/to/cache
+TAURI_RELEASE_CACHE_DIR=/tmp/tauri-release-cache tauri-release build --android
 ```
-
-Or override it for a build:
-
-```sh
-TAURI_RELEASE_CACHE_DIR=/path/to/cache tauri-release build --android
-```
-
-> [!TIP]
-> Keep caches outside the source tree if you want the repository to stay small. Keep them inside a known CI cache directory if you want faster repeat builds.
 
 ### Configuration
 
-A minimal mobile config:
-
-```toml
-[project]
-project_dir = "apps/mobile"
-package_manager = "pnpm"
-
-[container]
-engine = "podman"
-android_image = "localhost/tauri-release-android:latest"
-
-[output]
-clean = true
-sha256 = true
-manifest = true
-
-[android]
-enabled = true
-apk = true
-aab = true
-targets = ["aarch64"]
-```
-
-A minimal desktop Linux config:
-
-```toml
-[project]
-project_dir = "apps/desktop"
-package_manager = "pnpm"
-
-[container]
-engine = "podman"
-linux_image = "localhost/tauri-release-linux:latest"
-
-[linux]
-enabled = true
-bundles = ["appimage", "deb", "rpm"]
-```
-
-Common command-line overrides:
+Generate the example config:
 
 ```sh
-# Choose project directory
-tauri-release build --project-dir apps/mobile --android
+tauri-release init
+```
 
-# Choose output directory
-tauri-release build --output dist/releases/0.1.0 --linux
+The source example lives under:
 
-# Use Docker instead of Podman where supported
-tauri-release build --engine docker --linux
-
-# Pass extra arguments to the Tauri CLI
-tauri-release build --linux --tauri-arg=--verbose
+```text
+examples/tauri-release.toml
 ```
 
 ### Container images
 
-Build the included starter images:
+Templates are included under `templates/`:
 
-```sh
-podman build -f templates/Containerfile.linux -t localhost/tauri-release-linux:latest .
-podman build -f templates/Containerfile.android -t localhost/tauri-release-android:latest .
+```text
+templates/Containerfile.linux
+templates/Containerfile.android
+templates/Containerfile.windows
+templates/Containerfile.macos
+templates/Containerfile.ios
 ```
 
-Then reference them from `tauri-release.toml`:
-
-```toml
-[container]
-linux_image = "localhost/tauri-release-linux:latest"
-android_image = "localhost/tauri-release-android:latest"
-```
+The default image names are placeholders. Replace them in `tauri-release.toml` with project-owned images that pin the exact Rust, Node, Tauri, SDK, signing, and bundling toolchain used by your release flow.
 
 ## Known issues
 
-- Windows, macOS, and iOS targets are intentionally host-native by default.
-- Android release signing still depends on your Tauri/Android project configuration.
-- Container images are starter templates. Production projects should pin tool versions, Android SDK versions, Node versions, and Rust toolchains.
-- The source project should not rely on uncommitted generated files unless those files are also available inside the container build context.
+Windows, macOS, and iOS container builds are only as reliable as the toolchain inside the configured image. `tauri-release` orchestrates the release session, cache, output, and cleanup. It does not magically provide Apple SDKs, Windows signing certificates, or proprietary build tools.
+
+Android builds still require the generated Tauri Android project internally. The generated Gradle output is kept inside the disposable workspace unless it matches the artifact whitelist.
 
 ## Contributing
 
-If you want to contribute to `verzly/tauri-release` or test local changes, install the local binary:
-
-```sh
-cargo install --path . --force
-```
-
-Run the validation script:
-
-```sh
-scripts/validate-project.sh
-```
-
-Test against a real Tauri project:
-
-```sh
-tauri-release plan --project-dir /path/to/app --linux --android
-tauri-release build --project-dir /path/to/app --linux --android --apk --verbose
-```
-
-Keep release behavior explicit: build in a disposable workspace, collect only whitelisted artifacts, and avoid writing generated build output back into the source tree.
+Keep changes small, reproducible, and release-focused. Prefer explicit platform strategy, deterministic output paths, and artifact whitelists over implicit build side effects.

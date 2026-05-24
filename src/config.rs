@@ -13,11 +13,11 @@ pub struct ReleaseConfig {
     pub container: ContainerConfig,
     pub output: OutputConfig,
     pub artifacts: ArtifactConfig,
-    pub linux: LinuxConfig,
+    pub linux: DesktopPlatformConfig,
     pub android: AndroidConfig,
-    pub windows: HostPlatformConfig,
-    pub macos: HostPlatformConfig,
-    pub ios: HostPlatformConfig,
+    pub windows: DesktopPlatformConfig,
+    pub macos: DesktopPlatformConfig,
+    pub ios: IosConfig,
 }
 
 impl Default for ReleaseConfig {
@@ -27,11 +27,11 @@ impl Default for ReleaseConfig {
             container: ContainerConfig::default(),
             output: OutputConfig::default(),
             artifacts: ArtifactConfig::default(),
-            linux: LinuxConfig::default(),
+            linux: DesktopPlatformConfig::linux_default(),
             android: AndroidConfig::default(),
-            windows: HostPlatformConfig::windows_default(),
-            macos: HostPlatformConfig::macos_default(),
-            ios: HostPlatformConfig::ios_default(),
+            windows: DesktopPlatformConfig::windows_default(),
+            macos: DesktopPlatformConfig::macos_default(),
+            ios: IosConfig::default(),
         }
     }
 }
@@ -67,6 +67,9 @@ pub struct ContainerConfig {
     pub cache_dir: Option<PathBuf>,
     pub linux_image: String,
     pub android_image: String,
+    pub windows_image: String,
+    pub macos_image: String,
+    pub ios_image: String,
     pub userns_keep_id: bool,
     pub network: Option<String>,
 }
@@ -78,6 +81,9 @@ impl Default for ContainerConfig {
             cache_dir: None,
             linux_image: "ghcr.io/your-org/tauri-release-linux:latest".to_string(),
             android_image: "ghcr.io/your-org/tauri-release-android:latest".to_string(),
+            windows_image: "ghcr.io/your-org/tauri-release-windows:latest".to_string(),
+            macos_image: "ghcr.io/your-org/tauri-release-macos:latest".to_string(),
+            ios_image: "ghcr.io/your-org/tauri-release-ios:latest".to_string(),
             userns_keep_id: true,
             network: None,
         }
@@ -137,19 +143,58 @@ impl Default for ArtifactConfig {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
-pub struct LinuxConfig {
+pub struct DesktopPlatformConfig {
     pub enabled: bool,
+    pub strategy: BuildStrategy,
     pub image: Option<String>,
     pub bundles: Vec<String>,
+    pub targets: Vec<String>,
     pub command: Option<String>,
 }
 
-impl Default for LinuxConfig {
-    fn default() -> Self {
+impl DesktopPlatformConfig {
+    pub fn linux_default() -> Self {
         Self {
             enabled: true,
+            strategy: BuildStrategy::Auto,
             image: None,
             bundles: vec!["appimage".into(), "deb".into(), "rpm".into()],
+            targets: Vec::new(),
+            command: None,
+        }
+    }
+
+    pub fn windows_default() -> Self {
+        Self {
+            enabled: false,
+            strategy: BuildStrategy::Auto,
+            image: None,
+            bundles: vec!["nsis".into(), "msi".into()],
+            targets: vec!["x86_64-pc-windows-msvc".into()],
+            command: None,
+        }
+    }
+
+    pub fn macos_default() -> Self {
+        Self {
+            enabled: false,
+            strategy: BuildStrategy::Auto,
+            image: None,
+            bundles: vec!["dmg".into(), "app".into()],
+            targets: vec!["universal-apple-darwin".into()],
+            command: None,
+        }
+    }
+}
+
+impl Default for DesktopPlatformConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            strategy: BuildStrategy::Disabled,
+            image: None,
+            bundles: Vec::new(),
+            targets: Vec::new(),
             command: None,
         }
     }
@@ -159,6 +204,7 @@ impl Default for LinuxConfig {
 #[serde(default)]
 pub struct AndroidConfig {
     pub enabled: bool,
+    pub strategy: BuildStrategy,
     pub image: Option<String>,
     pub apk: bool,
     pub aab: bool,
@@ -171,6 +217,7 @@ impl Default for AndroidConfig {
     fn default() -> Self {
         Self {
             enabled: true,
+            strategy: BuildStrategy::Container,
             image: None,
             apk: true,
             aab: true,
@@ -183,58 +230,38 @@ impl Default for AndroidConfig {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
-pub struct HostPlatformConfig {
+pub struct IosConfig {
     pub enabled: bool,
-    pub strategy: HostStrategy,
+    pub strategy: BuildStrategy,
+    pub image: Option<String>,
+    pub targets: Vec<String>,
     pub command: Option<String>,
 }
 
-impl HostPlatformConfig {
-    pub fn windows_default() -> Self {
+impl Default for IosConfig {
+    fn default() -> Self {
         Self {
             enabled: false,
-            strategy: HostStrategy::HostOnly,
-            command: Some("pnpm tauri build".into()),
-        }
-    }
-
-    pub fn macos_default() -> Self {
-        Self {
-            enabled: false,
-            strategy: HostStrategy::HostOnly,
-            command: Some("pnpm tauri build".into()),
-        }
-    }
-
-    pub fn ios_default() -> Self {
-        Self {
-            enabled: false,
-            strategy: HostStrategy::HostOnly,
-            command: Some("pnpm tauri ios build --ci".into()),
+            strategy: BuildStrategy::Auto,
+            image: None,
+            targets: Vec::new(),
+            command: None,
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
-pub enum HostStrategy {
+pub enum BuildStrategy {
     Disabled,
+    Auto,
+    Container,
     HostOnly,
 }
 
-impl Default for HostPlatformConfig {
+impl Default for BuildStrategy {
     fn default() -> Self {
-        Self {
-            enabled: false,
-            strategy: HostStrategy::Disabled,
-            command: None,
-        }
-    }
-}
-
-impl Default for HostStrategy {
-    fn default() -> Self {
-        HostStrategy::Disabled
+        BuildStrategy::Disabled
     }
 }
 
@@ -325,6 +352,6 @@ pub fn write_example_config(path: &Path, force: bool) -> Result<()> {
         anyhow::bail!("{} already exists. Use --force to overwrite it.", path.display());
     }
 
-    fs::write(path, include_str!("../tauri-release.example.toml"))
+    fs::write(path, include_str!("../examples/tauri-release.toml"))
         .with_context(|| format!("failed to write {}", path.display()))
 }

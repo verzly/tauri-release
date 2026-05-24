@@ -1,0 +1,15 @@
+# Example image for macOS Tauri builds orchestrated by tauri-release.
+#
+# macOS Tauri bundles, signing, and notarization normally require Apple SDKs
+# and credentials. Use this as a project-specific image placeholder if your
+# environment already has a legal/working Darwin cross-build toolchain.
+FROM docker.io/library/ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates curl build-essential clang lld llvm pkg-config zip unzip \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install Rust/Node/Tauri prerequisites and your Darwin SDK/toolchain here.
+WORKDIR /work

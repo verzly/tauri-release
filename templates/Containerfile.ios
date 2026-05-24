@@ -1,0 +1,15 @@
+# Example image for iOS Tauri builds orchestrated by tauri-release.
+#
+# iOS builds normally require Xcode/iOS SDK tooling. For most projects the
+# auto strategy will use a macOS host when available. Configure this image only
+# if your infrastructure provides a valid containerized iOS build environment.
+FROM docker.io/library/ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates curl build-essential clang lld llvm pkg-config zip unzip \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install Rust/Node/Tauri prerequisites and your iOS toolchain bridge here.
+WORKDIR /work

@@ -1,35 +1,32 @@
 [project]
 project_dir = "apps/desktop"
 package_manager = "pnpm"
+install_command = "corepack enable && pnpm install --frozen-lockfile"
 
 [container]
 engine = "podman"
-linux_image = "localhost/tauri-release-linux:latest"
-android_image = "localhost/tauri-release-android:latest"
+linux_image = "ghcr.io/your-org/tauri-release-linux:latest"
+windows_image = "ghcr.io/your-org/tauri-release-windows:latest"
+macos_image = "ghcr.io/your-org/tauri-release-macos:latest"
 
 [output]
-dir = "dist/tauri-release/desktop"
 clean = true
 sha256 = true
 manifest = true
 
 [linux]
 enabled = true
+strategy = "auto"
 bundles = ["appimage", "deb", "rpm"]
-
-[android]
-enabled = false
 
 [windows]
 enabled = false
-strategy = "host-only"
-command = "pnpm tauri build"
+strategy = "auto"
+bundles = ["nsis", "msi"]
+targets = ["x86_64-pc-windows-msvc"]
 
 [macos]
 enabled = false
-strategy = "host-only"
-command = "pnpm tauri build"
-
-[ios]
-enabled = false
-strategy = "host-only"
+strategy = "auto"
+bundles = ["dmg", "app"]
+targets = ["universal-apple-darwin"]

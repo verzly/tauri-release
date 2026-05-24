@@ -150,12 +150,13 @@ impl BuildContext {
         println!("  cache:          {}", self.cache_dir.display());
         println!("  engine:         {:?}", self.engine);
         println!("  package:        {:?}", self.metadata.package_manager);
+        println!("  host:           {}", util::current_host_platform());
         println!("  targets:");
-        println!("    linux:        {}", selected.linux);
-        println!("    android:      {}", selected.android);
-        println!("    windows:      {}", selected.windows);
-        println!("    macos:        {}", selected.macos);
-        println!("    ios:          {}", selected.ios);
+        println!("    linux:        {} ({:?} -> {:?})", selected.linux, self.config.linux.strategy, crate::host::resolve_strategy(self.config.linux.strategy, "linux"));
+        println!("    android:      {} ({:?} -> {:?})", selected.android, self.config.android.strategy, crate::host::resolve_strategy(self.config.android.strategy, "android"));
+        println!("    windows:      {} ({:?} -> {:?})", selected.windows, self.config.windows.strategy, crate::host::resolve_strategy(self.config.windows.strategy, "windows"));
+        println!("    macos:        {} ({:?} -> {:?})", selected.macos, self.config.macos.strategy, crate::host::resolve_strategy(self.config.macos.strategy, "macos"));
+        println!("    ios:          {} ({:?} -> {:?})", selected.ios, self.config.ios.strategy, crate::host::resolve_strategy(self.config.ios.strategy, "ios"));
         println!("  android:");
         println!("    apk:          {}", self.config.android.apk);
         println!("    aab:          {}", self.config.android.aab);

@@ -42,3 +42,24 @@ pub fn now_session_id(prefix: &str) -> String {
 pub fn path_for_container(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
+
+pub fn current_host_platform() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "linux") {
+        "linux"
+    } else {
+        "unknown"
+    }
+}
+
+pub fn host_matches_platform(platform: &str) -> bool {
+    match platform {
+        "windows" => cfg!(target_os = "windows"),
+        "macos" | "ios" => cfg!(target_os = "macos"),
+        "linux" => cfg!(target_os = "linux"),
+        _ => false,
+    }
+}

@@ -1,30 +1,55 @@
 use anyhow::Result;
-use std::fs;
+use std::path::Path;
 
-use crate::config::HostStrategy;
+use crate::config::BuildStrategy;
+use crate::container::{self, ContainerRun};
 use crate::context::BuildContext;
 use crate::host;
+use crate::platforms::common;
 
 pub fn build(ctx: &BuildContext) -> Result<()> {
-    match ctx.config.windows.strategy {
-        HostStrategy::Disabled => {
-            anyhow::bail!("windows build is disabled. Enable [windows] strategy = 'host-only' in tauri-release.toml.");
-        }
-        HostStrategy::HostOnly => {
-            if !cfg!(windows) {
-                anyhow::bail!("windows Tauri installer build requires a Windows host/runner. This project intentionally does not pretend Linux Podman can reliably build MSI/NSIS artifacts.");
-            }
-            let command = ctx.config.windows.command.clone().unwrap_or_else(|| "pnpm tauri build".into());
-            host::run_shell(ctx, "windows", &command)?;
-            copy_host_artifacts(ctx, "windows")
-        }
+    match host::resolve_strategy(ctx.config.windows.strategy, "windows") {
+        BuildStrategy::Disabled => anyhow::bail!("Windows build is disabled."),
+        BuildStrategy::Auto => unreachable!("auto strategy must be resolved before build"),
+        BuildStrategy::HostOnly => build_host(ctx),
+        BuildStrategy::Container => build_container(ctx),
     }
 }
 
-fn copy_host_artifacts(ctx: &BuildContext, platform: &str) -> Result<()> {
-    let source = ctx.root_dir.join(&ctx.project_dir);
-    let out = ctx.platform_output_dir(platform);
-    fs::create_dir_all(&out)?;
-    crate::artifacts::copy_matching_files(&source, &out, &ctx.config.artifacts)?;
-    Ok(())
+fn command(ctx: &BuildContext) -> String {
+    ctx.config.windows.command.clone().unwrap_or_else(|| {
+        format!(
+            "{} build{}{}{}",
+            ctx.metadata.package_manager.tauri_command(),
+            common::target_arg(&ctx.config.windows.targets),
+            common::bundles_arg(&ctx.config.windows.bundles),
+            common::extra_tauri_args(ctx)
+        )
+    })
+}
+
+fn build_container(ctx: &BuildContext) -> Result<()> {
+    let image = ctx
+        .config
+        .windows
+        .image
+        .clone()
+        .unwrap_or_else(|| ctx.config.container.windows_image.clone());
+    container::ensure_image_hint(&image, Path::new("templates/Containerfile.windows"));
+
+    let script = format!(
+        r#"
+{command}
+{copy}
+"#,
+        command = command(ctx),
+        copy = container::copy_artifact_script("windows")
+    );
+
+    container::run(ctx, ContainerRun::new(ctx, "windows", image, script))
+}
+
+fn build_host(ctx: &BuildContext) -> Result<()> {
+    host::run_shell(ctx, "windows", &command(ctx))?;
+    common::copy_host_artifacts(ctx, "windows")
 }

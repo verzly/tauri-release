@@ -48,23 +48,23 @@ pub struct BuildArgs {
     #[arg(long, value_enum)]
     pub package_manager: Option<PackageManager>,
 
-    /// Build Linux desktop bundles inside Podman.
+    /// Build Linux desktop bundles. Auto strategy uses the native host on Linux, otherwise a container.
     #[arg(long, default_value_t = false)]
     pub linux: bool,
 
-    /// Build Android APK/AAB artifacts inside Podman.
+    /// Build Android APK/AAB artifacts. Defaults to a container strategy.
     #[arg(long, default_value_t = false)]
     pub android: bool,
 
-    /// Build Windows artifacts. Requires a Windows host strategy or custom config.
+    /// Build Windows artifacts. Auto strategy uses a Windows host on Windows, otherwise a container.
     #[arg(long, default_value_t = false)]
     pub windows: bool,
 
-    /// Build macOS artifacts. Requires macOS host strategy.
+    /// Build macOS artifacts. Auto strategy uses a macOS host on macOS, otherwise a container.
     #[arg(long, default_value_t = false)]
     pub macos: bool,
 
-    /// Build iOS artifacts. Requires macOS host strategy.
+    /// Build iOS artifacts. Auto strategy uses a macOS host, otherwise a container.
     #[arg(long, default_value_t = false)]
     pub ios: bool,
 

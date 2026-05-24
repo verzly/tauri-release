@@ -1,36 +1,26 @@
 [project]
 project_dir = "apps/mobile"
 package_manager = "pnpm"
+install_command = "corepack enable && pnpm install --frozen-lockfile"
 
 [container]
 engine = "podman"
-linux_image = "localhost/tauri-release-linux:latest"
-android_image = "localhost/tauri-release-android:latest"
+android_image = "ghcr.io/your-org/tauri-release-android:latest"
+ios_image = "ghcr.io/your-org/tauri-release-ios:latest"
 
 [output]
-dir = "dist/tauri-release/mobile"
 clean = true
 sha256 = true
 manifest = true
 
-[linux]
-enabled = false
-
 [android]
 enabled = true
+strategy = "container"
 apk = true
 aab = true
-split_per_abi = false
 targets = ["aarch64"]
-
-[windows]
-enabled = false
-strategy = "host-only"
-
-[macos]
-enabled = false
-strategy = "host-only"
 
 [ios]
 enabled = false
-strategy = "host-only"
+strategy = "auto"
+targets = []
