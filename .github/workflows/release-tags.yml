@@ -1,0 +1,78 @@
+name: Update release tags
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'Cargo.toml'
+      - 'README.md'
+      - 'LICENSE'
+      - 'examples/**'
+      - 'scripts/**'
+      - 'src/**'
+      - 'templates/**'
+      - '.github/workflows/release-tags.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-release-tags:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: git fetch --tags --force
+
+      - name: Resolve Cargo package version
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="$(python3 -c 'import re, pathlib; content = pathlib.Path("Cargo.toml").read_text(encoding="utf-8"); match = re.search(r"^version\s*=\s*\"([^\"]+)\"", content, re.MULTILINE); print(match.group(1) if match else "")')"
+
+          if [ -z "${VERSION:-}" ]; then
+            echo "Could not resolve Cargo package version."
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $VERSION"
+
+      - name: Create version tag and move latest tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION_TAG="${{ steps.package.outputs.version_tag }}"
+          TARGET_SHA="${GITHUB_SHA}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git rev-parse -q --verify "refs/tags/${VERSION_TAG}" >/dev/null; then
+            EXISTING_SHA="$(git rev-list -n 1 "${VERSION_TAG}")"
+
+            if [ "${EXISTING_SHA}" != "${TARGET_SHA}" ]; then
+              echo "::error::${VERSION_TAG} already exists at ${EXISTING_SHA}. Bump Cargo.toml package.version before publishing a new release commit."
+              exit 1
+            fi
+
+            echo "Version tag ${VERSION_TAG} already points to ${TARGET_SHA}."
+          else
+            git tag "${VERSION_TAG}" "${TARGET_SHA}"
+            git push origin "refs/tags/${VERSION_TAG}"
+            echo "Created version tag ${VERSION_TAG} -> ${TARGET_SHA}."
+          fi
+
+          git tag -f latest "${TARGET_SHA}"
+          git push origin refs/tags/latest --force
+          echo "Updated latest -> ${VERSION_TAG} (${TARGET_SHA})."
