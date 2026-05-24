@@ -124,3 +124,11 @@ jobs:
             git push origin "refs/tags/${MOVING_TAG}" --force
             echo "Updated ${MOVING_TAG} -> ${VERSION_TAG} (${TARGET_SHA})."
           done
+
+      - name: Sync release description
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/sync-release-notes.sh "${{ steps.package.outputs.version_tag }}"

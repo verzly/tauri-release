@@ -14,20 +14,16 @@ inputs:
     description: GitHub Release tag to download from. Leave empty to use the latest release.
     required: false
     default: ""
-  binary:
-    description: Binary to install. Use tauri-release or cargo-tauri-release.
-    required: false
-    default: tauri-release
   install-only:
     description: Install the executable and add it to PATH without running it.
     required: false
     default: "false"
   args:
-    description: Arguments passed to the selected binary when install-only is false.
+    description: Arguments passed to tauri-release when install-only is false.
     required: false
     default: "--version"
   working-directory:
-    description: Directory where the selected binary should run.
+    description: Directory where tauri-release should run.
     required: false
     default: "."
 
@@ -93,16 +89,10 @@ runs:
         DEFAULT_TOKEN: ${{ github.token }}
         REPOSITORY: ${{ inputs.repository }}
         VERSION: ${{ inputs.version }}
-        BINARY: ${{ inputs.binary }}
         HOST: ${{ steps.host.outputs.host-target }}
         EXT: ${{ steps.host.outputs.extension }}
       run: |
         set -euo pipefail
-
-        if [ "${BINARY}" != "tauri-release" ] && [ "${BINARY}" != "cargo-tauri-release" ]; then
-          echo "::error::Unsupported binary '${BINARY}'. Use tauri-release or cargo-tauri-release."
-          exit 1
-        fi
 
         if ! command -v gh >/dev/null 2>&1; then
           echo "::error::The GitHub CLI is required to download standalone assets. GitHub-hosted runners include it by default."
@@ -123,7 +113,7 @@ runs:
 
         TOOL_DIR="${RUNNER_TEMP}/tauri-release-action"
         BIN_DIR="${RUNNER_TEMP}/tauri-release-bin"
-        PATTERN="${BINARY}-v*-${HOST}${EXT}"
+        PATTERN="tauri-release-v*-${HOST}${EXT}"
 
         rm -rf "${TOOL_DIR}" "${BIN_DIR}"
         mkdir -p "${TOOL_DIR}" "${BIN_DIR}"
@@ -142,14 +132,14 @@ runs:
           exit 1
         fi
 
-        cp "${TOOL}" "${BIN_DIR}/${BINARY}${EXT}"
+        cp "${TOOL}" "${BIN_DIR}/tauri-release${EXT}"
         if [ "${RUNNER_OS}" != "Windows" ]; then
-          chmod 755 "${BIN_DIR}/${BINARY}${EXT}"
+          chmod 755 "${BIN_DIR}/tauri-release${EXT}"
         fi
 
         echo "${BIN_DIR}" >> "${GITHUB_PATH}"
-        echo "bin-path=${BIN_DIR}/${BINARY}${EXT}" >> "${GITHUB_OUTPUT}"
-        "${BIN_DIR}/${BINARY}${EXT}" --version
+        echo "bin-path=${BIN_DIR}/tauri-release${EXT}" >> "${GITHUB_OUTPUT}"
+        "${BIN_DIR}/tauri-release${EXT}" --version
 
     - name: Run tauri-release
       if: inputs.install-only != 'true'

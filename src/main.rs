@@ -20,20 +20,7 @@ use crate::cli::{Cli, Commands};
 use crate::context::BuildContext;
 
 fn normalized_args() -> Vec<OsString> {
-    let mut args: Vec<OsString> = env::args_os().collect();
-
-    // Cargo custom subcommands may invoke the binary as:
-    // cargo-tauri-release tauri-release <args>
-    if args
-        .get(1)
-        .and_then(|value| value.to_str())
-        .map(|value| value == "tauri-release" || value == "tauri_release")
-        .unwrap_or(false)
-    {
-        args.remove(1);
-    }
-
-    args
+    env::args_os().collect()
 }
 
 fn install_ctrlc_handler(session_prefix: String) -> Result<()> {
