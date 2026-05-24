@@ -12,6 +12,7 @@ on:
       - 'src/**'
       - 'templates/**'
       - '.github/workflows/release-tags.yml'
+      - '.github/workflows/standalone-executables.yml'
   workflow_dispatch:
 
 permissions:

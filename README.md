@@ -13,6 +13,7 @@ It provides an integrated release flow with built-in support for:
 - **Artifact whitelisting** so only installers, packages, signatures, metadata, and checksums are kept
 - **SHA-256 checksums** for collected release files
 - **Release manifest generation** for predictable publishing
+- **Standalone CLI publishing** through `cargo-release`
 
 Build inside a disposable workspace, keep only executable artifacts, and let the container session remove everything else.
 
@@ -23,6 +24,7 @@ Build inside a disposable workspace, keep only executable artifacts, and let the
   - [Cleanup](#cleanup)
 - [Get started](#get-started)
   - [Install](#install)
+  - [Standalone executable](#standalone-executable)
   - [Create config](#create-config)
   - [Upgrade](#upgrade)
 - [Usage](#usage)
@@ -130,7 +132,7 @@ cargo install --git https://github.com/verzly/tauri-release --tag latest --force
 Install a specific release tag when you need a reproducible tool version:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --tag v0.1.5 --force
+cargo install --git https://github.com/verzly/tauri-release --tag v0.1.8 --force
 ```
 
 Development branch installation is only recommended when contributing or testing unreleased changes:
@@ -151,6 +153,60 @@ After installation, both command styles are available:
 tauri-release --help
 cargo tauri-release --help
 ```
+
+### Standalone executable
+
+Git tag-based `cargo install` is the primary installation path when Rust is available. If you do not want a Rust toolchain on the machine, every version release also publishes raw standalone executables.
+
+Open the latest release and download the executable for your operating system and CPU target:
+
+```text
+https://github.com/verzly/tauri-release/releases/latest
+```
+
+The release assets are single executables, not project archives. Download the executable, place it somewhere on your `PATH`, and run it from the Tauri project you want to release.
+
+Asset names use this pattern:
+
+```text
+tauri-release-v0.1.8-<rust-host-target>
+tauri-release-v0.1.8-<rust-host-target>.exe
+cargo-tauri-release-v0.1.8-<rust-host-target>
+cargo-tauri-release-v0.1.8-<rust-host-target>.exe
+```
+
+Typical targets are:
+
+```text
+x86_64-unknown-linux-gnu
+x86_64-pc-windows-msvc
+aarch64-apple-darwin
+```
+
+Linux/macOS example:
+
+```sh
+curl -L -o tauri-release https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.8-x86_64-unknown-linux-gnu
+chmod +x tauri-release
+./tauri-release --help
+```
+
+Windows PowerShell example:
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.8-x86_64-pc-windows-msvc.exe" -OutFile "tauri-release.exe"
+.\tauri-release.exe --help
+```
+
+If you want the Cargo subcommand form, download the `cargo-tauri-release` executable instead and keep that name on your `PATH`:
+
+```sh
+cargo tauri-release --help
+```
+
+Each executable has a matching `.sha256` file next to it in the release assets.
+
+The standalone workflow is built with `cargo-release`. It installs the stable `cargo-release` tool from the `latest` Git tag, then uses it to build and publish both standalone binaries: `tauri-release` and `cargo-tauri-release`. Release `cargo-release` first when publishing both tools from a clean state.
 
 ### Create config
 
@@ -196,7 +252,7 @@ cargo install --git https://github.com/verzly/tauri-release --tag latest --force
 Upgrade or pin to a specific release tag:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --tag v0.1.5 --force
+cargo install --git https://github.com/verzly/tauri-release --tag v0.1.8 --force
 ```
 
 Only use the development branch if you intentionally want unreleased changes:
