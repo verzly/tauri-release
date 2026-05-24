@@ -122,6 +122,29 @@ impl BuildContext {
         }
     }
 
+
+    pub fn selected_platform_names(&self) -> Vec<&'static str> {
+        let selected = self.selected_platforms();
+        let mut platforms = Vec::new();
+        if selected.linux {
+            platforms.push("linux");
+        }
+        if selected.android {
+            platforms.push("android");
+        }
+        if selected.windows {
+            platforms.push("windows");
+        }
+        if selected.macos {
+            platforms.push("macos");
+        }
+        if selected.ios {
+            platforms.push("ios");
+        }
+
+        platforms
+    }
+
     pub fn prepare_output_dir(&self) -> Result<()> {
         if self.output_dir.exists() && self.config.output.clean {
             fs::remove_dir_all(&self.output_dir)

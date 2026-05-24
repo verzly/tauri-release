@@ -18,28 +18,33 @@ pub fn build(ctx: &BuildContext) -> Result<()> {
 
 fn command(ctx: &BuildContext) -> String {
     ctx.config.android.command.clone().unwrap_or_else(|| {
-        let mut parts = vec![
-            ctx.metadata.package_manager.tauri_command().to_string(),
-            "android".into(),
-            "build".into(),
-            "--ci".into(),
-        ];
+        let mut args = vec!["android", "build", "--ci"];
 
         if ctx.config.android.apk {
-            parts.push("--apk".into());
+            args.push("--apk");
         }
         if ctx.config.android.aab {
-            parts.push("--aab".into());
+            args.push("--aab");
         }
         if ctx.config.android.split_per_abi {
-            parts.push("--split-per-abi".into());
+            args.push("--split-per-abi");
         }
+
+        let mut command = format!(
+            "{} {}",
+            ctx.metadata.package_manager.tauri_command(),
+            common::shell_args(args)
+        );
+
         if !ctx.config.android.targets.is_empty() {
-            parts.push("--target".into());
-            parts.extend(ctx.config.android.targets.iter().cloned());
+            command.push_str(&format!(
+                " --target {}",
+                ctx.config.android.targets.iter().map(|target| crate::util::shell_quote(target)).collect::<Vec<_>>().join(" ")
+            ));
         }
-        parts.extend(ctx.args.tauri_args.iter().cloned());
-        parts.join(" ")
+
+        command.push_str(&common::extra_tauri_args(ctx));
+        command
     })
 }
 
@@ -63,7 +68,7 @@ export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin
 {copy}
 "#,
         command = command(ctx),
-        copy = container::copy_artifact_script("android")
+        copy = container::copy_artifact_script("android", &ctx.config.artifacts)
     );
 
     container::run(ctx, ContainerRun::new(ctx, "android", image, script))

@@ -16,23 +16,23 @@ use std::env;
 use std::ffi::OsString;
 use std::process::{Command, Stdio};
 
-use crate::cli::{Cli, Commands};
+use crate::cli::{Cli, Commands, ContainerEngine};
 use crate::context::BuildContext;
 
 fn normalized_args() -> Vec<OsString> {
     env::args_os().collect()
 }
 
-fn install_ctrlc_handler(session_prefix: String) -> Result<()> {
+fn install_ctrlc_handler(session_prefix: String, engine: ContainerEngine) -> Result<()> {
     ctrlc::set_handler(move || {
         eprintln!("\n{}", "Aborting. Cleaning up running release containers...".red().bold());
-        let _ = Command::new("podman")
+        let _ = Command::new(engine.executable())
             .args(["ps", "-q", "--filter", &format!("name={}", session_prefix)])
             .output()
             .map(|output| {
                 let ids = String::from_utf8_lossy(&output.stdout);
                 for id in ids.lines().filter(|line| !line.trim().is_empty()) {
-                    let _ = Command::new("podman")
+                    let _ = Command::new(engine.executable())
                         .args(["kill", id])
                         .stdout(Stdio::null())
                         .stderr(Stdio::null())
@@ -111,18 +111,18 @@ fn main() -> Result<()> {
         }
         Some(Commands::Plan(args)) => {
             let ctx = BuildContext::from_sources(args.clone())?;
-            install_ctrlc_handler(ctx.session_prefix.clone())?;
+            install_ctrlc_handler(ctx.session_prefix.clone(), ctx.engine)?;
             ctx.print_plan();
             Ok(())
         }
         Some(Commands::Build(args)) => {
             let ctx = BuildContext::from_sources(args.clone())?;
-            install_ctrlc_handler(ctx.session_prefix.clone())?;
+            install_ctrlc_handler(ctx.session_prefix.clone(), ctx.engine)?;
             run_build(&ctx)
         }
         None => {
             let ctx = BuildContext::from_sources(cli.build.clone())?;
-            install_ctrlc_handler(ctx.session_prefix.clone())?;
+            install_ctrlc_handler(ctx.session_prefix.clone(), ctx.engine)?;
             run_build(&ctx)
         }
     }
