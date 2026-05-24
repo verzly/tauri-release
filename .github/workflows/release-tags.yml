@@ -1,19 +1,14 @@
 name: Update release tags
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'Cargo.toml'
-      - 'README.md'
-      - 'LICENSE'
-      - 'examples/**'
-      - 'scripts/**'
-      - 'src/**'
-      - 'templates/**'
-      - '.github/workflows/release-tags.yml'
-      - '.github/workflows/standalone-executables.yml'
+  release:
+    types: [published]
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to tag. Defaults to the current master branch.
+        required: false
+        default: master
 
 permissions:
   contents: write
@@ -23,10 +18,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Resolve checkout ref
+        id: ref
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            REF="${{ inputs.ref }}"
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            REF="${{ github.event.release.tag_name }}"
+          elif [ -n "${GITHUB_SHA:-}" ]; then
+            REF="${GITHUB_SHA}"
+          else
+            REF="master"
+          fi
+
+          if [ -z "${REF:-}" ]; then
+            REF="master"
+          fi
+
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "Checkout ref: $REF"
+
       - name: Checkout repository with full history
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ steps.ref.outputs.ref }}
 
       - name: Fetch all tags
         run: git fetch --tags --force
@@ -48,13 +67,27 @@ jobs:
           echo "version_tag=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "Resolved version: $VERSION"
 
+      - name: Validate release tag
+        if: github.event_name == 'release'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          VERSION_TAG="${{ steps.package.outputs.version_tag }}"
+
+          if [ "${RELEASE_TAG}" != "${VERSION_TAG}" ]; then
+            echo "::error::Release tag ${RELEASE_TAG} does not match Cargo.toml package.version tag ${VERSION_TAG}."
+            exit 1
+          fi
+
       - name: Create version tag and move latest tag
         shell: bash
         run: |
           set -euo pipefail
 
           VERSION_TAG="${{ steps.package.outputs.version_tag }}"
-          TARGET_SHA="${GITHUB_SHA}"
+          TARGET_SHA="$(git rev-parse HEAD)"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
