@@ -1,23 +1,46 @@
 use anyhow::Result;
 use std::fs;
+use std::path::PathBuf;
 
 use crate::context::BuildContext;
 use crate::util::shell_quote;
 
 pub fn copy_host_artifacts(ctx: &BuildContext, platform: &str) -> Result<()> {
-    let source = ctx.root_dir.join(&ctx.project_dir);
     let out = ctx.platform_output_dir(platform);
     fs::create_dir_all(&out)?;
-    let copied = crate::artifacts::copy_matching_files(&source, &out, &ctx.config.artifacts)?;
+
+    let sources = host_artifact_sources(ctx, platform);
+    let mut copied = 0usize;
+    for source in &sources {
+        if !source.exists() {
+            continue;
+        }
+        copied += crate::artifacts::copy_matching_files(source, &out, &ctx.config.artifacts)?;
+    }
 
     if copied == 0 && !ctx.config.artifacts.allow_empty {
+        let searched = sources
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
         anyhow::bail!(
-            "no release artifacts were collected for {}. Check the build output or set artifacts.allow_empty = true intentionally.",
-            platform
+            "no release artifacts were collected for {}. Searched: {}. Check the build output or set artifacts.allow_empty = true intentionally.",
+            platform,
+            searched
         );
     }
 
     Ok(())
+}
+
+fn host_artifact_sources(ctx: &BuildContext, platform: &str) -> Vec<PathBuf> {
+    let mut sources = vec![ctx.root_dir.join(&ctx.project_dir)];
+    let cargo_target_dir = ctx.cache_dir.join(platform).join("cargo-target");
+    if !sources.iter().any(|source| source == &cargo_target_dir) {
+        sources.push(cargo_target_dir);
+    }
+    sources
 }
 
 pub fn bundles_arg(bundles: &[String]) -> String {
