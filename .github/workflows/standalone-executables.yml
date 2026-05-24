@@ -128,7 +128,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       PACKAGE_NAME: tauri-release
-      RELEASE_BINS: "tauri-release cargo-tauri-release"
+      RELEASE_BINS: "tauri-release"
       CARGO_RELEASE_BOOTSTRAP_MODE: "cargo-release-latest"
 
     steps:
@@ -140,8 +140,16 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Checkout cargo-release action
+        uses: actions/checkout@v4
+        with:
+          repository: verzly/cargo-release
+          ref: v0.1
+          path: .github/actions/cargo-release
+          token: ${{ secrets.CARGO_RELEASE_TOKEN || github.token }}
+
       - name: Install cargo-release release tool
-        uses: verzly/cargo-release@v0.1
+        uses: ./.github/actions/cargo-release
         with:
           install-only: true
           github-token: ${{ secrets.CARGO_RELEASE_TOKEN || github.token }}
@@ -276,8 +284,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.resolve-release.outputs.version_tag }}
-          name: ${{ needs.resolve-release.outputs.version_tag }}
           files: dist/assets/*
           fail_on_unmatched_files: true
-          generate_release_notes: true
           overwrite_files: true

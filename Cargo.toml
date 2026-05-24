@@ -1,6 +1,6 @@
 [package]
 name = "tauri-release"
-version = "0.1.14"
+version = "0.1.16"
 edition = "2021"
 description = "Containerized release builder for Tauri desktop and mobile artifacts"
 license = "AGPL-3.0-or-later"
@@ -23,6 +23,3 @@ walkdir = "2.5"
 name = "tauri-release"
 path = "src/main.rs"
 
-[[bin]]
-name = "cargo-tauri-release"
-path = "src/main.rs"

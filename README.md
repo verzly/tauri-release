@@ -140,7 +140,7 @@ cargo install --git https://github.com/verzly/tauri-release --tag v0 --force
 Install a specific release tag when you need a reproducible tool version:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --tag v0.1.14 --force
+cargo install --git https://github.com/verzly/tauri-release --tag v0.1.16 --force
 ```
 
 Development branch installation is only recommended when contributing or testing unreleased changes:
@@ -155,11 +155,10 @@ For a local checkout during development:
 cargo install --path . --force
 ```
 
-After installation, both command styles are available:
+After installation, the command is available:
 
 ```sh
 tauri-release --help
-cargo tauri-release --help
 ```
 
 ### Standalone executable
@@ -177,10 +176,8 @@ The release assets are single executables, not project archives. Download the ex
 Asset names use this pattern:
 
 ```text
-tauri-release-v0.1.14-<rust-host-target>
-tauri-release-v0.1.14-<rust-host-target>.exe
-cargo-tauri-release-v0.1.14-<rust-host-target>
-cargo-tauri-release-v0.1.14-<rust-host-target>.exe
+tauri-release-v0.1.16-<rust-host-target>
+tauri-release-v0.1.16-<rust-host-target>.exe
 ```
 
 Typical targets are:
@@ -194,7 +191,7 @@ aarch64-apple-darwin
 Linux/macOS example:
 
 ```sh
-curl -L -o tauri-release https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.14-x86_64-unknown-linux-gnu
+curl -L -o tauri-release https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.16-x86_64-unknown-linux-gnu
 chmod +x tauri-release
 ./tauri-release --help
 ```
@@ -202,19 +199,16 @@ chmod +x tauri-release
 Windows PowerShell example:
 
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.14-x86_64-pc-windows-msvc.exe" -OutFile "tauri-release.exe"
+Invoke-WebRequest -Uri "https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.16-x86_64-pc-windows-msvc.exe" -OutFile "tauri-release.exe"
 .\tauri-release.exe --help
 ```
 
-If you want the Cargo subcommand form, download the `cargo-tauri-release` executable instead and keep that name on your `PATH`:
-
-```sh
-cargo tauri-release --help
-```
 
 Each executable has a matching `.sha256` file next to it in the release assets.
 
-The standalone workflow is built with `cargo-release`. It downloads the published standalone `cargo-release` executable from the latest `verzly/cargo-release` release, then uses that tool to build and publish both standalone binaries: `tauri-release` and `cargo-tauri-release`. Release `cargo-release` first when publishing both tools from a clean state. If `verzly/cargo-release` is private, add a `CARGO_RELEASE_TOKEN` repository secret with read access to that repository. The workflow runs when publishing a GitHub Release and can also be started manually. It does not run from workflow chaining or tag pushes, so standalone assets are created only from an explicit release flow.
+The standalone workflow is built with `cargo-release`. Release `cargo-release` first when publishing both tools from a clean state. If `verzly/cargo-release` is private, add a `CARGO_RELEASE_TOKEN` repository secret with read access to that repository. The workflow runs when publishing a GitHub Release and can also be started manually. It does not run from workflow chaining or tag pushes, so standalone assets are created only from an explicit release flow.
+Release descriptions are synchronized by the release-tag workflow. When `CHANGELOG.md` contains a section for the current version, that section overwrites the GitHub Release description; otherwise the workflow keeps the existing body and removes duplicate generated `What's Changed` sections.
+
 
 ### GitHub Action
 
@@ -246,7 +240,7 @@ For private repository usage, allow this action repository to be accessed by rep
     github-token: ${{ secrets.TAURI_RELEASE_TOKEN }}
 ```
 
-The action downloads the matching standalone executable for the current runner, adds it to `PATH`, and optionally runs it with the provided `args`. The standalone publishing workflow in this repository uses the `verzly/cargo-release@v0.1` action with `CARGO_RELEASE_TOKEN` to install the release tool from the private sibling repository.
+The action downloads the matching standalone executable for the current runner, adds it to `PATH`, and optionally runs it with the provided `args`.
 
 
 ### Create config
@@ -293,7 +287,7 @@ cargo install --git https://github.com/verzly/tauri-release --tag latest --force
 Upgrade or pin to a specific release tag:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --tag v0.1.14 --force
+cargo install --git https://github.com/verzly/tauri-release --tag v0.1.16 --force
 ```
 
 Only use the development branch if you intentionally want unreleased changes:
