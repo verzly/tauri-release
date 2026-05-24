@@ -1,0 +1,32 @@
+[project]
+project_dir = "apps/desktop"
+package_manager = "pnpm"
+install_command = "corepack enable && pnpm install --frozen-lockfile"
+
+[container]
+engine = "podman"
+linux_image = "ghcr.io/your-org/tauri-release-linux:latest"
+windows_image = "ghcr.io/your-org/tauri-release-windows:latest"
+macos_image = "ghcr.io/your-org/tauri-release-macos:latest"
+
+[output]
+clean = true
+sha256 = true
+manifest = true
+
+[linux]
+enabled = true
+strategy = "auto"
+bundles = ["appimage", "deb", "rpm"]
+
+[windows]
+enabled = false
+strategy = "auto"
+bundles = ["nsis", "msi"]
+targets = ["x86_64-pc-windows-msvc"]
+
+[macos]
+enabled = false
+strategy = "auto"
+bundles = ["dmg", "app"]
+targets = ["universal-apple-darwin"]

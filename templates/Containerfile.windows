@@ -1,0 +1,17 @@
+# Example image for Windows Tauri builds orchestrated by tauri-release.
+#
+# Tauri Windows installer builds can be sensitive to WiX/NSIS, WebView2,
+# signing, and target toolchain details. This template is intentionally a
+# starting point: pin your Rust, Node, Tauri, WiX/NSIS, and signing setup in
+# the project-specific image used by [windows].image.
+FROM docker.io/library/ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates curl build-essential clang lld llvm pkg-config nsis zip unzip \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install Rust/Node/Tauri prerequisites in your real image.
+# Add xwin/llvm-mingw/WiX/signing tools as required by your release flow.
+WORKDIR /work

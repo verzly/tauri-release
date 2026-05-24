@@ -1,0 +1,90 @@
+# tauri-release example configuration
+# The source project is mounted read-only, copied into a disposable workspace, and only whitelisted artifacts are copied back.
+
+[project]
+# For a plain Tauri project use ".".
+# For a monorepo use something like "apps/desktop" or "apps/mobile".
+project_dir = "."
+
+# Optional. Auto-detected from lockfiles when omitted: pnpm, npm, yarn, bun, cargo.
+# package_manager = "pnpm"
+
+# Optional. Overrides the default dependency install command inside the container.
+# install_command = "corepack enable && pnpm install --frozen-lockfile"
+
+# Optional metadata override. Normally detected from package.json, src-tauri/Cargo.toml, or tauri.conf.json.
+# app_name = "my-tauri-app"
+# version = "0.1.0"
+
+[project.env]
+# TAURI_SIGNING_PRIVATE_KEY = "..."
+# TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "..."
+
+[container]
+engine = "podman"
+linux_image = "ghcr.io/your-org/tauri-release-linux:latest"
+android_image = "ghcr.io/your-org/tauri-release-android:latest"
+windows_image = "ghcr.io/your-org/tauri-release-windows:latest"
+macos_image = "ghcr.io/your-org/tauri-release-macos:latest"
+ios_image = "ghcr.io/your-org/tauri-release-ios:latest"
+userns_keep_id = true
+# cache_dir = ".cache/tauri-release"
+# network = "host"
+
+[output]
+# Defaults to dist/<version>.
+# dir = "dist/release"
+clean = true
+sha256 = true
+manifest = true
+
+[artifacts]
+include_extensions = ["AppImage", "deb", "rpm", "exe", "msi", "zip", "dmg", "apk", "aab", "ipa", "sig", "json"]
+include_files = ["latest.json", "release.json"]
+keep_relative_paths = false
+
+[linux]
+enabled = true
+# auto = host build on Linux, container build elsewhere.
+strategy = "auto"
+bundles = ["appimage", "deb", "rpm"]
+targets = []
+# image = "ghcr.io/your-org/tauri-release-linux:latest"
+# command = "pnpm tauri build --bundles appimage,deb,rpm"
+
+[android]
+enabled = true
+# Android defaults to container because it is usually an SDK/NDK toolchain build rather than a host-native OS build.
+strategy = "container"
+apk = true
+aab = true
+split_per_abi = false
+targets = ["aarch64"]
+# image = "ghcr.io/your-org/tauri-release-android:latest"
+# command = "pnpm tauri android build --ci --apk --aab --target aarch64"
+
+[windows]
+enabled = false
+# auto = host build on Windows, container build on Linux/macOS.
+strategy = "auto"
+bundles = ["nsis", "msi"]
+targets = ["x86_64-pc-windows-msvc"]
+# image = "ghcr.io/your-org/tauri-release-windows:latest"
+# command = "pnpm tauri build --target x86_64-pc-windows-msvc --bundles nsis,msi"
+
+[macos]
+enabled = false
+# auto = host build on macOS, container build elsewhere.
+strategy = "auto"
+bundles = ["dmg", "app"]
+targets = ["universal-apple-darwin"]
+# image = "ghcr.io/your-org/tauri-release-macos:latest"
+# command = "pnpm tauri build --target universal-apple-darwin --bundles dmg,app"
+
+[ios]
+enabled = false
+# auto = host build on macOS, container build elsewhere.
+strategy = "auto"
+targets = []
+# image = "ghcr.io/your-org/tauri-release-ios:latest"
+# command = "pnpm tauri ios build --ci"
