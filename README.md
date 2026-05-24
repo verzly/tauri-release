@@ -121,7 +121,25 @@ Special release metadata files such as `latest.json` and `release.json` are also
 
 ### Install
 
-Install from a local checkout during development:
+Install stable releases directly from the Git repository. The recommended target is the moving `latest` tag, which is maintained by the release-tag workflow.
+
+```sh
+cargo install --git https://github.com/verzly/tauri-release --tag latest --force
+```
+
+Install a specific release tag when you need a reproducible tool version:
+
+```sh
+cargo install --git https://github.com/verzly/tauri-release --tag v0.1.5 --force
+```
+
+Development branch installation is only recommended when contributing or testing unreleased changes:
+
+```sh
+cargo install --git https://github.com/verzly/tauri-release --branch main --force
+```
+
+For a local checkout during development:
 
 ```sh
 cargo install --path . --force
@@ -169,10 +187,22 @@ tauri-release init release/tauri-release.toml
 
 ### Upgrade
 
-When the tool is installed from a local checkout, reinstall after pulling updates:
+Upgrade to the latest stable tag:
 
 ```sh
-cargo install --path . --force
+cargo install --git https://github.com/verzly/tauri-release --tag latest --force
+```
+
+Upgrade or pin to a specific release tag:
+
+```sh
+cargo install --git https://github.com/verzly/tauri-release --tag v0.1.5 --force
+```
+
+Only use the development branch if you intentionally want unreleased changes:
+
+```sh
+cargo install --git https://github.com/verzly/tauri-release --branch main --force
 ```
 
 ## Usage
@@ -358,3 +388,11 @@ Android builds still require the generated Tauri Android project internally. The
 ## Contributing
 
 Keep changes small, reproducible, and release-focused. Prefer explicit platform strategy, deterministic output paths, and artifact whitelists over implicit build side effects.
+
+Release tags are managed by GitHub Actions. On `main`, the workflow reads `Cargo.toml` `package.version`, creates the immutable `vX.Y.Z` tag when it does not exist, and moves the `latest` tag to the same commit.
+
+If the version tag already exists on another commit, the workflow fails instead of moving it. Bump `Cargo.toml` before publishing another release commit for the same project.
+
+## License
+
+This project is licensed under AGPL-3.0-or-later. See [LICENSE](LICENSE) for details.
