@@ -1,12 +1,6 @@
 name: Build standalone executables
 
 on:
-  workflow_run:
-    workflows: ["Update release tags"]
-    types: [completed]
-  push:
-    tags:
-      - 'v*'
   release:
     types: [published]
   workflow_dispatch:
@@ -20,12 +14,11 @@ permissions:
   contents: write
 
 concurrency:
-  group: standalone-${{ github.workflow }}-${{ github.event.release.tag_name || github.ref_name || github.event.workflow_run.head_sha || github.sha }}
+  group: standalone-${{ github.workflow }}-${{ github.event.release.tag_name || github.ref_name || github.sha }}
   cancel-in-progress: true
 
 jobs:
   resolve-release:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event_name == 'release' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'release')
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.package.outputs.version }}
@@ -41,10 +34,6 @@ jobs:
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             REF="${{ inputs.ref }}"
-          elif [ "${{ github.event_name }}" = "workflow_run" ]; then
-            REF="${{ github.event.workflow_run.head_sha }}"
-          elif [ "${{ github.event_name }}" = "push" ]; then
-            REF="${{ github.ref_name }}"
           elif [ "${{ github.event_name }}" = "release" ]; then
             REF="${{ github.event.release.tag_name }}"
           elif [ -n "${GITHUB_SHA:-}" ]; then
@@ -108,13 +97,6 @@ jobs:
           VERSION_TAG="${{ steps.package.outputs.version_tag }}"
           TARGET_SHA="$(git rev-parse HEAD)"
 
-          if [ "${{ github.event_name }}" = "push" ]; then
-            PUSH_TAG="${{ github.ref_name }}"
-            if [ "${PUSH_TAG}" != "${VERSION_TAG}" ]; then
-              echo "::error::Pushed tag ${PUSH_TAG} does not match Cargo.toml package.version tag ${VERSION_TAG}."
-              exit 1
-            fi
-          fi
 
           if ! git rev-parse -q --verify "refs/tags/${VERSION_TAG}" >/dev/null; then
             echo "::error::Release tag ${VERSION_TAG} does not exist. Publish the GitHub Release or run the Update release tags workflow first."
