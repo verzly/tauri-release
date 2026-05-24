@@ -25,6 +25,7 @@ Build inside a disposable workspace, keep only executable artifacts, and let the
 - [Get started](#get-started)
   - [Install](#install)
   - [Standalone executable](#standalone-executable)
+  - [GitHub Action](#github-action)
   - [Create config](#create-config)
   - [Upgrade](#upgrade)
 - [Usage](#usage)
@@ -123,16 +124,23 @@ Special release metadata files such as `latest.json` and `release.json` are also
 
 ### Install
 
-Install stable releases directly from the Git repository. The recommended target is the moving `latest` tag, which is maintained by the release-tag workflow.
+Install stable releases directly from the Git repository. The recommended target is the moving `latest` tag, which is maintained by the release-tag workflow. The same workflow also moves the matching major and minor channel tags, such as `v0` and `v0.1`.
 
 ```sh
 cargo install --git https://github.com/verzly/tauri-release --tag latest --force
 ```
 
+Use a moving major or minor channel when you want controlled automatic upgrades within that compatibility range:
+
+```sh
+cargo install --git https://github.com/verzly/tauri-release --tag v0.1 --force
+cargo install --git https://github.com/verzly/tauri-release --tag v0 --force
+```
+
 Install a specific release tag when you need a reproducible tool version:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --tag v0.1.10 --force
+cargo install --git https://github.com/verzly/tauri-release --tag v0.1.14 --force
 ```
 
 Development branch installation is only recommended when contributing or testing unreleased changes:
@@ -169,10 +177,10 @@ The release assets are single executables, not project archives. Download the ex
 Asset names use this pattern:
 
 ```text
-tauri-release-v0.1.10-<rust-host-target>
-tauri-release-v0.1.10-<rust-host-target>.exe
-cargo-tauri-release-v0.1.10-<rust-host-target>
-cargo-tauri-release-v0.1.10-<rust-host-target>.exe
+tauri-release-v0.1.14-<rust-host-target>
+tauri-release-v0.1.14-<rust-host-target>.exe
+cargo-tauri-release-v0.1.14-<rust-host-target>
+cargo-tauri-release-v0.1.14-<rust-host-target>.exe
 ```
 
 Typical targets are:
@@ -186,7 +194,7 @@ aarch64-apple-darwin
 Linux/macOS example:
 
 ```sh
-curl -L -o tauri-release https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.10-x86_64-unknown-linux-gnu
+curl -L -o tauri-release https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.14-x86_64-unknown-linux-gnu
 chmod +x tauri-release
 ./tauri-release --help
 ```
@@ -194,7 +202,7 @@ chmod +x tauri-release
 Windows PowerShell example:
 
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.10-x86_64-pc-windows-msvc.exe" -OutFile "tauri-release.exe"
+Invoke-WebRequest -Uri "https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.14-x86_64-pc-windows-msvc.exe" -OutFile "tauri-release.exe"
 .\tauri-release.exe --help
 ```
 
@@ -206,7 +214,40 @@ cargo tauri-release --help
 
 Each executable has a matching `.sha256` file next to it in the release assets.
 
-The standalone workflow is built with `cargo-release`. It installs the stable `cargo-release` tool from the `latest` Git tag, then uses it to build and publish both standalone binaries: `tauri-release` and `cargo-tauri-release`. Release `cargo-release` first when publishing both tools from a clean state. It runs after the release-tag workflow and can also be started manually, by publishing a GitHub Release, or by pushing a release tag.
+The standalone workflow is built with `cargo-release`. It downloads the published standalone `cargo-release` executable from the latest `verzly/cargo-release` release, then uses that tool to build and publish both standalone binaries: `tauri-release` and `cargo-tauri-release`. Release `cargo-release` first when publishing both tools from a clean state. If `verzly/cargo-release` is private, add a `CARGO_RELEASE_TOKEN` repository secret with read access to that repository. The workflow runs when publishing a GitHub Release and can also be started manually. It does not run from workflow chaining or tag pushes, so standalone assets are created only from an explicit release flow.
+
+### GitHub Action
+
+The repository also exposes a composite GitHub Action, so other workflows can call the tool by repository name:
+
+```yaml
+- name: Build Tauri release artifacts
+  uses: verzly/tauri-release@v0.1
+  with:
+    args: build --linux --android --apk --aab
+```
+
+Use `install-only` when a workflow needs the executable on `PATH` and will run commands later:
+
+```yaml
+- name: Install tauri-release
+  uses: verzly/tauri-release@v0.1
+  with:
+    install-only: true
+```
+
+For private repository usage, allow this action repository to be accessed by repositories owned by the same owner, and pass a token that can read the published release assets:
+
+```yaml
+- name: Install tauri-release
+  uses: verzly/tauri-release@v0.1
+  with:
+    install-only: true
+    github-token: ${{ secrets.TAURI_RELEASE_TOKEN }}
+```
+
+The action downloads the matching standalone executable for the current runner, adds it to `PATH`, and optionally runs it with the provided `args`. The standalone publishing workflow in this repository uses the `verzly/cargo-release@v0.1` action with `CARGO_RELEASE_TOKEN` to install the release tool from the private sibling repository.
+
 
 ### Create config
 
@@ -252,7 +293,7 @@ cargo install --git https://github.com/verzly/tauri-release --tag latest --force
 Upgrade or pin to a specific release tag:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --tag v0.1.10 --force
+cargo install --git https://github.com/verzly/tauri-release --tag v0.1.14 --force
 ```
 
 Only use the development branch if you intentionally want unreleased changes:
@@ -445,7 +486,7 @@ Android builds still require the generated Tauri Android project internally. The
 
 Keep changes small, reproducible, and release-focused. Prefer explicit platform strategy, deterministic output paths, and artifact whitelists over implicit build side effects.
 
-Release tags are managed by GitHub Actions. On manual runs and published GitHub Releases, the workflow reads `Cargo.toml` `package.version`, creates the immutable `vX.Y.Z` tag when it does not exist, and moves the `latest` tag to the same commit. Regular `master` pushes do not update release tags.
+Release tags are managed by GitHub Actions. On manual runs and published GitHub Releases, the workflow reads `Cargo.toml` `package.version`, creates the immutable `vX.Y.Z` tag when it does not exist, and moves the `latest`, `vX.Y`, and `vX` channel tags to the same commit. Regular `master` pushes do not update release tags.
 
 If the version tag already exists on another commit, the workflow fails instead of moving it. Bump `Cargo.toml` before publishing another release commit for the same project.
 

@@ -1,0 +1,164 @@
+name: tauri-release
+description: Install and optionally run the tauri-release standalone executable
+
+inputs:
+  github-token:
+    description: Token used to read release assets. Use a PAT when the action or release assets are in another private repository.
+    required: false
+    default: ""
+  repository:
+    description: Repository that publishes the tauri-release standalone executable assets.
+    required: false
+    default: verzly/tauri-release
+  version:
+    description: GitHub Release tag to download from. Leave empty to use the latest release.
+    required: false
+    default: ""
+  binary:
+    description: Binary to install. Use tauri-release or cargo-tauri-release.
+    required: false
+    default: tauri-release
+  install-only:
+    description: Install the executable and add it to PATH without running it.
+    required: false
+    default: "false"
+  args:
+    description: Arguments passed to the selected binary when install-only is false.
+    required: false
+    default: "--version"
+  working-directory:
+    description: Directory where the selected binary should run.
+    required: false
+    default: "."
+
+outputs:
+  bin-path:
+    description: Absolute path to the installed executable.
+    value: ${{ steps.install.outputs.bin-path }}
+  host-target:
+    description: Rust-style host target used to select the standalone executable asset.
+    value: ${{ steps.host.outputs.host-target }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve host target
+      id: host
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        EXT=""
+        case "${RUNNER_OS}" in
+          Linux)
+            ARCH="$(uname -m)"
+            case "${ARCH}" in
+              x86_64|amd64) HOST="x86_64-unknown-linux-gnu" ;;
+              aarch64|arm64) HOST="aarch64-unknown-linux-gnu" ;;
+              *) echo "::error::Unsupported Linux architecture: ${ARCH}"; exit 1 ;;
+            esac
+            ;;
+          macOS)
+            ARCH="$(uname -m)"
+            case "${ARCH}" in
+              x86_64|amd64) HOST="x86_64-apple-darwin" ;;
+              aarch64|arm64) HOST="aarch64-apple-darwin" ;;
+              *) echo "::error::Unsupported macOS architecture: ${ARCH}"; exit 1 ;;
+            esac
+            ;;
+          Windows)
+            EXT=".exe"
+            ARCH="${PROCESSOR_ARCHITECTURE:-AMD64}"
+            case "${ARCH}" in
+              AMD64|amd64|x86_64) HOST="x86_64-pc-windows-msvc" ;;
+              ARM64|arm64|aarch64) HOST="aarch64-pc-windows-msvc" ;;
+              *) echo "::error::Unsupported Windows architecture: ${ARCH}"; exit 1 ;;
+            esac
+            ;;
+          *)
+            echo "::error::Unsupported runner OS: ${RUNNER_OS}"
+            exit 1
+            ;;
+        esac
+
+        echo "host-target=${HOST}" >> "${GITHUB_OUTPUT}"
+        echo "extension=${EXT}" >> "${GITHUB_OUTPUT}"
+        echo "Resolved host target: ${HOST}"
+
+    - name: Install tauri-release
+      id: install
+      shell: bash
+      env:
+        INPUT_TOKEN: ${{ inputs.github-token }}
+        DEFAULT_TOKEN: ${{ github.token }}
+        REPOSITORY: ${{ inputs.repository }}
+        VERSION: ${{ inputs.version }}
+        BINARY: ${{ inputs.binary }}
+        HOST: ${{ steps.host.outputs.host-target }}
+        EXT: ${{ steps.host.outputs.extension }}
+      run: |
+        set -euo pipefail
+
+        if [ "${BINARY}" != "tauri-release" ] && [ "${BINARY}" != "cargo-tauri-release" ]; then
+          echo "::error::Unsupported binary '${BINARY}'. Use tauri-release or cargo-tauri-release."
+          exit 1
+        fi
+
+        if ! command -v gh >/dev/null 2>&1; then
+          echo "::error::The GitHub CLI is required to download standalone assets. GitHub-hosted runners include it by default."
+          exit 1
+        fi
+
+        GH_TOKEN_VALUE="${INPUT_TOKEN:-}"
+        if [ -z "${GH_TOKEN_VALUE}" ]; then
+          GH_TOKEN_VALUE="${DEFAULT_TOKEN:-}"
+        fi
+
+        if [ -z "${GH_TOKEN_VALUE}" ]; then
+          echo "::error::No GitHub token is available. Pass github-token when reading assets from a private repository."
+          exit 1
+        fi
+
+        export GH_TOKEN="${GH_TOKEN_VALUE}"
+
+        TOOL_DIR="${RUNNER_TEMP}/tauri-release-action"
+        BIN_DIR="${RUNNER_TEMP}/tauri-release-bin"
+        PATTERN="${BINARY}-v*-${HOST}${EXT}"
+
+        rm -rf "${TOOL_DIR}" "${BIN_DIR}"
+        mkdir -p "${TOOL_DIR}" "${BIN_DIR}"
+
+        echo "Downloading ${PATTERN} from ${REPOSITORY}"
+        if [ -n "${VERSION}" ]; then
+          gh release download "${VERSION}" --repo "${REPOSITORY}" --pattern "${PATTERN}" --dir "${TOOL_DIR}"
+        else
+          gh release download --repo "${REPOSITORY}" --pattern "${PATTERN}" --dir "${TOOL_DIR}"
+        fi
+
+        TOOL="$(find "${TOOL_DIR}" -maxdepth 1 -type f -name "${PATTERN}" | sort | tail -n 1)"
+        if [ -z "${TOOL}" ]; then
+          echo "::error::No tauri-release executable matched ${PATTERN}."
+          find "${TOOL_DIR}" -maxdepth 1 -type f -print || true
+          exit 1
+        fi
+
+        cp "${TOOL}" "${BIN_DIR}/${BINARY}${EXT}"
+        if [ "${RUNNER_OS}" != "Windows" ]; then
+          chmod 755 "${BIN_DIR}/${BINARY}${EXT}"
+        fi
+
+        echo "${BIN_DIR}" >> "${GITHUB_PATH}"
+        echo "bin-path=${BIN_DIR}/${BINARY}${EXT}" >> "${GITHUB_OUTPUT}"
+        "${BIN_DIR}/${BINARY}${EXT}" --version
+
+    - name: Run tauri-release
+      if: inputs.install-only != 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        BIN_PATH: ${{ steps.install.outputs.bin-path }}
+        ARGS: ${{ inputs.args }}
+      run: |
+        set -euo pipefail
+        # shellcheck disable=SC2086
+        "${BIN_PATH}" ${ARGS}

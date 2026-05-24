@@ -63,9 +63,19 @@ jobs:
             exit 1
           fi
 
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Cargo.toml package.version must be SemVer compatible. Got: $VERSION"
+            exit 1
+          fi
+
+          IFS='.' read -r MAJOR MINOR _PATCH_AND_SUFFIX <<< "$VERSION"
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "version_tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "major_tag=v$MAJOR" >> "$GITHUB_OUTPUT"
+          echo "minor_tag=v$MAJOR.$MINOR" >> "$GITHUB_OUTPUT"
           echo "Resolved version: $VERSION"
+          echo "Resolved moving tags: latest, v$MAJOR, v$MAJOR.$MINOR"
 
       - name: Validate release tag
         if: github.event_name == 'release'
@@ -81,12 +91,14 @@ jobs:
             exit 1
           fi
 
-      - name: Create version tag and move latest tag
+      - name: Create version tag and move release channel tags
         shell: bash
         run: |
           set -euo pipefail
 
           VERSION_TAG="${{ steps.package.outputs.version_tag }}"
+          MINOR_TAG="${{ steps.package.outputs.minor_tag }}"
+          MAJOR_TAG="${{ steps.package.outputs.major_tag }}"
           TARGET_SHA="$(git rev-parse HEAD)"
 
           git config user.name "github-actions[bot]"
@@ -107,6 +119,8 @@ jobs:
             echo "Created version tag ${VERSION_TAG} -> ${TARGET_SHA}."
           fi
 
-          git tag -f latest "${TARGET_SHA}"
-          git push origin refs/tags/latest --force
-          echo "Updated latest -> ${VERSION_TAG} (${TARGET_SHA})."
+          for MOVING_TAG in latest "${MINOR_TAG}" "${MAJOR_TAG}"; do
+            git tag -f "${MOVING_TAG}" "${TARGET_SHA}"
+            git push origin "refs/tags/${MOVING_TAG}" --force
+            echo "Updated ${MOVING_TAG} -> ${VERSION_TAG} (${TARGET_SHA})."
+          done
