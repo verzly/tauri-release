@@ -132,13 +132,13 @@ cargo install --git https://github.com/verzly/tauri-release --tag latest --force
 Install a specific release tag when you need a reproducible tool version:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --tag v0.1.8 --force
+cargo install --git https://github.com/verzly/tauri-release --tag v0.1.10 --force
 ```
 
 Development branch installation is only recommended when contributing or testing unreleased changes:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --branch main --force
+cargo install --git https://github.com/verzly/tauri-release --branch master --force
 ```
 
 For a local checkout during development:
@@ -169,10 +169,10 @@ The release assets are single executables, not project archives. Download the ex
 Asset names use this pattern:
 
 ```text
-tauri-release-v0.1.8-<rust-host-target>
-tauri-release-v0.1.8-<rust-host-target>.exe
-cargo-tauri-release-v0.1.8-<rust-host-target>
-cargo-tauri-release-v0.1.8-<rust-host-target>.exe
+tauri-release-v0.1.10-<rust-host-target>
+tauri-release-v0.1.10-<rust-host-target>.exe
+cargo-tauri-release-v0.1.10-<rust-host-target>
+cargo-tauri-release-v0.1.10-<rust-host-target>.exe
 ```
 
 Typical targets are:
@@ -186,7 +186,7 @@ aarch64-apple-darwin
 Linux/macOS example:
 
 ```sh
-curl -L -o tauri-release https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.8-x86_64-unknown-linux-gnu
+curl -L -o tauri-release https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.10-x86_64-unknown-linux-gnu
 chmod +x tauri-release
 ./tauri-release --help
 ```
@@ -194,7 +194,7 @@ chmod +x tauri-release
 Windows PowerShell example:
 
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.8-x86_64-pc-windows-msvc.exe" -OutFile "tauri-release.exe"
+Invoke-WebRequest -Uri "https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.10-x86_64-pc-windows-msvc.exe" -OutFile "tauri-release.exe"
 .\tauri-release.exe --help
 ```
 
@@ -206,7 +206,7 @@ cargo tauri-release --help
 
 Each executable has a matching `.sha256` file next to it in the release assets.
 
-The standalone workflow is built with `cargo-release`. It installs the stable `cargo-release` tool from the `latest` Git tag, then uses it to build and publish both standalone binaries: `tauri-release` and `cargo-tauri-release`. Release `cargo-release` first when publishing both tools from a clean state.
+The standalone workflow is built with `cargo-release`. It installs the stable `cargo-release` tool from the `latest` Git tag, then uses it to build and publish both standalone binaries: `tauri-release` and `cargo-tauri-release`. Release `cargo-release` first when publishing both tools from a clean state. It runs after the release-tag workflow and can also be started manually, by publishing a GitHub Release, or by pushing a release tag.
 
 ### Create config
 
@@ -252,13 +252,13 @@ cargo install --git https://github.com/verzly/tauri-release --tag latest --force
 Upgrade or pin to a specific release tag:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --tag v0.1.8 --force
+cargo install --git https://github.com/verzly/tauri-release --tag v0.1.10 --force
 ```
 
 Only use the development branch if you intentionally want unreleased changes:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --branch main --force
+cargo install --git https://github.com/verzly/tauri-release --branch master --force
 ```
 
 ## Usage
@@ -445,7 +445,7 @@ Android builds still require the generated Tauri Android project internally. The
 
 Keep changes small, reproducible, and release-focused. Prefer explicit platform strategy, deterministic output paths, and artifact whitelists over implicit build side effects.
 
-Release tags are managed by GitHub Actions. On `main`, the workflow reads `Cargo.toml` `package.version`, creates the immutable `vX.Y.Z` tag when it does not exist, and moves the `latest` tag to the same commit.
+Release tags are managed by GitHub Actions. On manual runs and published GitHub Releases, the workflow reads `Cargo.toml` `package.version`, creates the immutable `vX.Y.Z` tag when it does not exist, and moves the `latest` tag to the same commit. Regular `master` pushes do not update release tags.
 
 If the version tag already exists on another commit, the workflow fails instead of moving it. Bump `Cargo.toml` before publishing another release commit for the same project.
 
