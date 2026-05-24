@@ -140,7 +140,7 @@ cargo install --git https://github.com/verzly/tauri-release --tag v0 --force
 Install a specific release tag when you need a reproducible tool version:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --tag v0.1.17 --force
+cargo install --git https://github.com/verzly/tauri-release --tag v0.1.18 --force
 ```
 
 Development branch installation is only recommended when contributing or testing unreleased changes:
@@ -176,8 +176,8 @@ The release assets are single executables, not project archives. Download the ex
 Asset names use this pattern:
 
 ```text
-tauri-release-v0.1.17-<rust-host-target>
-tauri-release-v0.1.17-<rust-host-target>.exe
+tauri-release-v0.1.18-<rust-host-target>
+tauri-release-v0.1.18-<rust-host-target>.exe
 ```
 
 Typical targets are:
@@ -191,7 +191,7 @@ aarch64-apple-darwin
 Linux/macOS example:
 
 ```sh
-curl -L -o tauri-release https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.17-x86_64-unknown-linux-gnu
+curl -L -o tauri-release https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.18-x86_64-unknown-linux-gnu
 chmod +x tauri-release
 ./tauri-release --help
 ```
@@ -199,7 +199,7 @@ chmod +x tauri-release
 Windows PowerShell example:
 
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.17-x86_64-pc-windows-msvc.exe" -OutFile "tauri-release.exe"
+Invoke-WebRequest -Uri "https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.18-x86_64-pc-windows-msvc.exe" -OutFile "tauri-release.exe"
 .\tauri-release.exe --help
 ```
 
@@ -207,7 +207,7 @@ Invoke-WebRequest -Uri "https://github.com/verzly/tauri-release/releases/latest/
 Each executable has a matching `.sha256` file next to it in the release assets.
 
 The standalone workflow is built with `cargo-release`. Release `cargo-release` first when publishing both tools from a clean state. If `verzly/cargo-release` is private, add a `CARGO_RELEASE_TOKEN` repository secret with read access to that repository. The workflow runs when publishing a GitHub Release and can also be started manually. It does not run from workflow chaining or tag pushes, so standalone assets are created only from an explicit release flow.
-Release descriptions are synchronized by the release-tag workflow. When `CHANGELOG.md` contains a section for the current version, that section overwrites the GitHub Release description; otherwise the workflow keeps the existing body and removes duplicate generated `What's Changed` sections.
+Release descriptions are synchronized by the release-tag workflow using GitHub generated release notes. `CHANGELOG.md` is no longer maintained manually; the GitHub Release body is regenerated from merged pull requests and commits in the same `What's Changed` style that GitHub shows in the release UI.
 
 
 ### GitHub Action
@@ -287,7 +287,7 @@ cargo install --git https://github.com/verzly/tauri-release --tag latest --force
 Upgrade or pin to a specific release tag:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --tag v0.1.17 --force
+cargo install --git https://github.com/verzly/tauri-release --tag v0.1.18 --force
 ```
 
 Only use the development branch if you intentionally want unreleased changes:
