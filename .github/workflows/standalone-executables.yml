@@ -141,12 +141,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-release release tool
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          cargo install --git https://github.com/verzly/cargo-release --tag latest --force
-          cargo-release --version
+        uses: verzly/cargo-release@v0.1
+        with:
+          install-only: true
+          github-token: ${{ secrets.CARGO_RELEASE_TOKEN || github.token }}
 
 
       - name: Resolve host target
