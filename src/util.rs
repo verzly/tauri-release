@@ -28,7 +28,23 @@ pub fn absolutize(path: impl AsRef<Path>) -> anyhow::Result<PathBuf> {
 }
 
 pub fn shell_quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
+    if value.is_empty() {
+        return if cfg!(windows) { "\"\"".into() } else { "''".into() };
+    }
+
+    if value.chars().all(is_shell_safe_char) {
+        return value.to_string();
+    }
+
+    if cfg!(windows) {
+        format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        format!("'{}'", value.replace('\'', "'\\''"))
+    }
+}
+
+fn is_shell_safe_char(value: char) -> bool {
+    value.is_ascii_alphanumeric() || matches!(value, '_' | '-' | '.' | '/' | ':' | '=' | ',' | '+' | '@' | '%')
 }
 
 pub fn now_session_id(prefix: &str) -> String {
