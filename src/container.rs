@@ -257,6 +257,7 @@ add_tauri_bundle_sources "src-tauri/target"
 
 if [ "$ARTIFACT_PLATFORM" = "android" ]; then
   add_source "src-tauri/gen/android/app/build/outputs"
+  add_source "dist/android"
 fi
 
 if [ "$ARTIFACT_PLATFORM" = "ios" ]; then

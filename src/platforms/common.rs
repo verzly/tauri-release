@@ -45,6 +45,7 @@ fn host_artifact_sources(ctx: &BuildContext, platform: &str) -> Vec<PathBuf> {
 
     if matches!(platform, "android") {
         add_source(&mut sources, project_dir.join("src-tauri").join("gen").join("android").join("app").join("build").join("outputs"));
+        add_source(&mut sources, project_dir.join("dist").join("android"));
     }
 
     if matches!(platform, "ios") {
