@@ -140,7 +140,7 @@ cargo install --git https://github.com/verzly/tauri-release --tag v0 --force
 Install a specific release tag when you need a reproducible tool version:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --tag v0.2.0 --force
+cargo install --git https://github.com/verzly/tauri-release --tag v0.2.1 --force
 ```
 
 Development branch installation is only recommended when contributing or testing unreleased changes:
@@ -176,8 +176,8 @@ The release assets are single executables, not project archives. Download the ex
 Asset names use this pattern:
 
 ```text
-tauri-release-v0.2.0-<rust-host-target>
-tauri-release-v0.2.0-<rust-host-target>.exe
+tauri-release-v0.2.1-<rust-host-target>
+tauri-release-v0.2.1-<rust-host-target>.exe
 ```
 
 Typical targets are:
@@ -191,7 +191,7 @@ aarch64-apple-darwin
 Linux/macOS example:
 
 ```sh
-curl -L -o tauri-release https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.2.0-x86_64-unknown-linux-gnu
+curl -L -o tauri-release https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.2.1-x86_64-unknown-linux-gnu
 chmod +x tauri-release
 ./tauri-release --help
 ```
@@ -199,7 +199,7 @@ chmod +x tauri-release
 Windows PowerShell example:
 
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.2.0-x86_64-pc-windows-msvc.exe" -OutFile "tauri-release.exe"
+Invoke-WebRequest -Uri "https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.2.1-x86_64-pc-windows-msvc.exe" -OutFile "tauri-release.exe"
 .\tauri-release.exe --help
 ```
 
@@ -288,7 +288,7 @@ cargo install --git https://github.com/verzly/tauri-release --tag latest --force
 Upgrade or pin to a specific release tag:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --tag v0.2.0 --force
+cargo install --git https://github.com/verzly/tauri-release --tag v0.2.1 --force
 ```
 
 Only use the development branch if you intentionally want unreleased changes:
@@ -484,7 +484,7 @@ Android builds still require the generated Tauri Android project internally. The
 
 Keep changes small, reproducible, and release-focused. Prefer explicit platform strategy, deterministic output paths, and artifact whitelists over implicit build side effects.
 
-Release tags are managed by the manual GitHub Actions `Release` workflow. Start the workflow with a version such as `0.2.0`; it must match `Cargo.toml` `package.version`. After every standalone executable build succeeds, the workflow creates the immutable `vX.Y.Z` tag when it does not exist, creates or updates the GitHub Release with generated release notes, uploads assets before publishing a new draft release, then moves the `latest`, `vX.Y`, and `vX` channel tags to the same commit. Generated release notes compare against the highest existing full `vX.Y.Z` tag lower than the new release version. Regular `master` pushes and pre-created GitHub Releases do not update release tags.
+Release tags are managed by the manual GitHub Actions `Release` workflow. Start the workflow with a version such as `0.2.1`; it must match `Cargo.toml` `package.version`. After every standalone executable build succeeds, the workflow creates the immutable `vX.Y.Z` tag when it does not exist, creates or updates the GitHub Release with generated release notes, uploads assets before publishing a new draft release, then moves the `latest`, `vX.Y`, and `vX` channel tags to the same commit. Generated release notes compare against the highest existing full `vX.Y.Z` tag lower than the new release version. Regular `master` pushes and pre-created GitHub Releases do not update release tags.
 
 If the version tag already exists on another commit, the workflow fails instead of moving it. Bump `Cargo.toml` before publishing another release commit for the same project.
 

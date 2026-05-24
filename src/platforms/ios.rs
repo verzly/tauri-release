@@ -21,7 +21,10 @@ fn command(ctx: &BuildContext) -> String {
         let targets = if ctx.config.ios.targets.is_empty() {
             String::new()
         } else {
-            format!(" --target {}", ctx.config.ios.targets.join(" "))
+            format!(
+                " --target {}",
+                ctx.config.ios.targets.iter().map(|target| crate::util::shell_quote(target)).collect::<Vec<_>>().join(" ")
+            )
         };
         format!(
             "{} ios build --ci{}{}",
