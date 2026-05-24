@@ -1,0 +1,359 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version. Must match Cargo.toml package.version.
+        required: true
+        type: string
+      ref:
+        description: Git ref to release. Defaults to the current master branch.
+        required: false
+        default: master
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.repository }}-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  resolve-release:
+    runs-on: ubuntu-latest
+    outputs:
+      package_name: ${{ steps.package.outputs.package_name }}
+      version: ${{ steps.package.outputs.version }}
+      version_tag: ${{ steps.package.outputs.version_tag }}
+      major_tag: ${{ steps.package.outputs.major_tag }}
+      minor_tag: ${{ steps.package.outputs.minor_tag }}
+      target_sha: ${{ steps.package.outputs.target_sha }}
+
+    steps:
+      - name: Checkout repository with full history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref }}
+
+      - name: Fetch all tags
+        run: git fetch --tags --force
+
+      - name: Resolve and validate release version
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          INPUT_VERSION="${{ inputs.version }}"
+          INPUT_VERSION="${INPUT_VERSION#v}"
+
+          read -r PACKAGE_NAME PACKAGE_VERSION < <(python3 - <<'PY'
+          import re
+          import pathlib
+
+          content = pathlib.Path("Cargo.toml").read_text(encoding="utf-8")
+          name = re.search(r'^name\s*=\s*"([^"]+)"', content, re.MULTILINE)
+          version = re.search(r'^version\s*=\s*"([^"]+)"', content, re.MULTILINE)
+          print((name.group(1) if name else "") + " " + (version.group(1) if version else ""))
+          PY
+          )
+
+          if [ -z "${PACKAGE_NAME:-}" ] || [ -z "${PACKAGE_VERSION:-}" ]; then
+            echo "::error::Could not resolve Cargo package name or version."
+            exit 1
+          fi
+
+          if [ "${INPUT_VERSION}" != "${PACKAGE_VERSION}" ]; then
+            echo "::error::Input version ${INPUT_VERSION} does not match Cargo.toml package.version ${PACKAGE_VERSION}."
+            exit 1
+          fi
+
+          if ! [[ "${PACKAGE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Cargo.toml package.version must be SemVer compatible. Got: ${PACKAGE_VERSION}"
+            exit 1
+          fi
+
+          BASE_VERSION="${PACKAGE_VERSION%%[-+]*}"
+          IFS='.' read -r MAJOR MINOR _PATCH <<< "${BASE_VERSION}"
+          TARGET_SHA="$(git rev-parse HEAD)"
+          VERSION_TAG="v${PACKAGE_VERSION}"
+          MINOR_TAG="v${MAJOR}.${MINOR}"
+          MAJOR_TAG="v${MAJOR}"
+
+          if git rev-parse -q --verify "refs/tags/${VERSION_TAG}" >/dev/null; then
+            EXISTING_SHA="$(git rev-list -n 1 "${VERSION_TAG}")"
+            if [ "${EXISTING_SHA}" != "${TARGET_SHA}" ]; then
+              echo "::error::${VERSION_TAG} already exists at ${EXISTING_SHA}, but this release targets ${TARGET_SHA}."
+              exit 1
+            fi
+            echo "Version tag ${VERSION_TAG} already points to ${TARGET_SHA}."
+          fi
+
+          echo "package_name=${PACKAGE_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "version=${PACKAGE_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "version_tag=${VERSION_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "minor_tag=${MINOR_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "major_tag=${MAJOR_TAG}" >> "${GITHUB_OUTPUT}"
+          echo "target_sha=${TARGET_SHA}" >> "${GITHUB_OUTPUT}"
+
+          echo "Resolved ${PACKAGE_NAME} ${PACKAGE_VERSION} at ${TARGET_SHA}."
+          echo "Release tags: ${VERSION_TAG}, ${MINOR_TAG}, ${MAJOR_TAG}, latest."
+
+  build-standalone:
+    needs: resolve-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+
+    runs-on: ${{ matrix.os }}
+    env:
+      PACKAGE_NAME: tauri-release
+      RELEASE_BINS: "tauri-release"
+      CARGO_RELEASE_BOOTSTRAP_MODE: "cargo-release-latest"
+
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve-release.outputs.target_sha }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Checkout cargo-release action
+        uses: actions/checkout@v6
+        with:
+          repository: verzly/cargo-release
+          ref: v0.1
+          path: .github/actions/cargo-release
+          token: ${{ secrets.CARGO_RELEASE_TOKEN || github.token }}
+
+      - name: Install cargo-release release tool
+        uses: ./.github/actions/cargo-release
+        with:
+          install-only: true
+          github-token: ${{ secrets.CARGO_RELEASE_TOKEN || github.token }}
+
+      - name: Resolve host target
+        id: host
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          HOST="$(rustc -vV | awk '/^host: / {print $2}')"
+          EXT=""
+
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            EXT=".exe"
+          fi
+
+          echo "host=$HOST" >> "$GITHUB_OUTPUT"
+          echo "ext=$EXT" >> "$GITHUB_OUTPUT"
+          echo "Resolved host target: $HOST"
+
+      - name: Build standalone executables through cargo-release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ needs.resolve-release.outputs.version }}"
+          HOST="${{ steps.host.outputs.host }}"
+          EXT="${{ steps.host.outputs.ext }}"
+          PLATFORM="${{ matrix.platform }}"
+
+          rm -rf dist
+          mkdir -p dist/assets dist/work .github/release .cache/cargo-release/standalone
+
+          build_one() {
+            BIN="$1"
+            OUT_DIR="dist/work/${BIN}"
+            CONFIG=".github/release/${BIN}.standalone.cargo-release.toml"
+
+            cat > "${CONFIG}" <<TOML
+          [project]
+          project_dir = "."
+          package_name = "${PACKAGE_NAME}"
+          binary_name = "${BIN}"
+          version = "${VERSION}"
+          cargo_args = []
+
+          [container]
+          engine = "podman"
+          cache_dir = ".cache/cargo-release/standalone"
+          linux_image = "docker.io/library/ubuntu:22.04"
+          windows_image = "docker.io/library/ubuntu:22.04"
+          macos_image = "docker.io/joseluisq/rust-linux-darwin-builder:2.0.0-beta.1"
+          userns_keep_id = true
+
+          [output]
+          dir = "${OUT_DIR}"
+          clean = true
+          sha256 = false
+          manifest = false
+
+          [artifacts]
+          include_extensions = ["exe"]
+          include_files = []
+          keep_relative_paths = false
+
+          [linux]
+          enabled = true
+          strategy = "auto"
+          target = ["${HOST}"]
+          output_suffix = "standalone"
+
+          [windows]
+          enabled = true
+          strategy = "auto"
+          target = ["${HOST}"]
+          output_suffix = "standalone"
+
+          [macos]
+          enabled = true
+          strategy = "auto"
+          target = ["${HOST}"]
+          output_suffix = "standalone"
+          TOML
+
+            cargo-release build --config "${CONFIG}" "--${PLATFORM}" --verbose
+
+            SOURCE=""
+            while IFS= read -r candidate; do
+              base="$(basename "${candidate}")"
+              if [[ "${base}" == "${BIN}"* ]] && [[ "${base}" != *.sha256 ]] && [[ "${base}" != *.json ]]; then
+                SOURCE="${candidate}"
+                break
+              fi
+            done < <(find "${OUT_DIR}" -maxdepth 6 -type f | sort)
+
+            if [ -z "${SOURCE}" ]; then
+              echo "Could not find standalone executable for ${BIN} under ${OUT_DIR}."
+              find "${OUT_DIR}" -maxdepth 6 -type f -print || true
+              exit 1
+            fi
+
+            ASSET="${BIN}-v${VERSION}-${HOST}${EXT}"
+            cp "${SOURCE}" "dist/assets/${ASSET}"
+
+            if [ "${RUNNER_OS}" != "Windows" ]; then
+              chmod 755 "dist/assets/${ASSET}"
+            fi
+
+            if command -v sha256sum >/dev/null 2>&1; then
+              (cd dist/assets && sha256sum "${ASSET}" > "${ASSET}.sha256")
+            else
+              (cd dist/assets && shasum -a 256 "${ASSET}" > "${ASSET}.sha256")
+            fi
+          }
+
+          for BIN in ${RELEASE_BINS}; do
+            build_one "${BIN}"
+          done
+
+          find dist/assets -maxdepth 1 -type f -print | sort
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.PACKAGE_NAME }}-${{ matrix.platform }}
+          path: dist/assets/*
+          if-no-files-found: error
+
+  publish-release:
+    needs:
+      - resolve-release
+      - build-standalone
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout release commit
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.resolve-release.outputs.target_sha }}
+
+      - name: Fetch all tags
+        run: git fetch --tags --force
+
+      - name: Download standalone artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: dist/assets
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_TAG: ${{ needs.resolve-release.outputs.version_tag }}
+          MINOR_TAG: ${{ needs.resolve-release.outputs.minor_tag }}
+          MAJOR_TAG: ${{ needs.resolve-release.outputs.major_tag }}
+          TARGET_SHA: ${{ needs.resolve-release.outputs.target_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git rev-parse -q --verify "refs/tags/${VERSION_TAG}" >/dev/null; then
+            EXISTING_SHA="$(git rev-list -n 1 "${VERSION_TAG}")"
+            if [ "${EXISTING_SHA}" != "${TARGET_SHA}" ]; then
+              echo "::error::${VERSION_TAG} already exists at ${EXISTING_SHA}, but this release targets ${TARGET_SHA}."
+              exit 1
+            fi
+            echo "Version tag ${VERSION_TAG} already points to ${TARGET_SHA}."
+          else
+            git tag "${VERSION_TAG}" "${TARGET_SHA}"
+            git push origin "refs/tags/${VERSION_TAG}"
+            echo "Created version tag ${VERSION_TAG} -> ${TARGET_SHA}."
+          fi
+
+          mkdir -p dist/assets
+          find dist/assets -maxdepth 1 -type f -print | sort
+
+          if ! find dist/assets -maxdepth 1 -type f | grep -q .; then
+            echo "::error::No release assets were downloaded."
+            exit 1
+          fi
+
+          find dist/assets -maxdepth 1 -type f ! -name '*.sha256' -exec chmod 755 {} \; || true
+
+          gh api \
+            --method POST \
+            "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            -f tag_name="${VERSION_TAG}" \
+            -f target_commitish="${TARGET_SHA}" \
+            --jq '.body' > release-notes.md
+
+          if [ ! -s release-notes.md ]; then
+            echo "Release ${VERSION_TAG}" > release-notes.md
+          fi
+
+          if gh release view "${VERSION_TAG}" >/dev/null 2>&1; then
+            gh release edit "${VERSION_TAG}" \
+              --title "${VERSION_TAG}" \
+              --notes-file release-notes.md
+          else
+            gh release create "${VERSION_TAG}" \
+              --target "${TARGET_SHA}" \
+              --title "${VERSION_TAG}" \
+              --notes-file release-notes.md
+          fi
+
+          gh release upload "${VERSION_TAG}" dist/assets/* --clobber
+
+          for MOVING_TAG in latest "${MINOR_TAG}" "${MAJOR_TAG}"; do
+            git tag -f "${MOVING_TAG}" "${TARGET_SHA}"
+            git push origin "refs/tags/${MOVING_TAG}" --force
+            echo "Updated ${MOVING_TAG} -> ${VERSION_TAG} (${TARGET_SHA})."
+          done
