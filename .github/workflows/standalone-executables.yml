@@ -1,0 +1,270 @@
+name: Build standalone executables
+
+on:
+  workflow_run:
+    workflows: ["Update release tags"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build. Defaults to the current main branch.
+        required: false
+        default: main
+
+permissions:
+  contents: write
+
+jobs:
+  resolve-release:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.package.outputs.version }}
+      version_tag: ${{ steps.package.outputs.version_tag }}
+      checkout_ref: ${{ steps.package.outputs.version_tag }}
+
+    steps:
+      - name: Resolve checkout ref
+        id: ref
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            REF="${{ inputs.ref }}"
+          else
+            REF="${{ github.event.workflow_run.head_sha }}"
+          fi
+
+          if [ -z "${REF:-}" ]; then
+            REF="main"
+          fi
+
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "Checkout ref: $REF"
+
+      - name: Checkout repository with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.ref.outputs.ref }}
+
+      - name: Fetch all tags
+        run: git fetch --tags --force
+
+      - name: Resolve Cargo package version
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="$(python3 -c 'import re, pathlib; content = pathlib.Path("Cargo.toml").read_text(encoding="utf-8"); match = re.search(r"^version\s*=\s*\"([^\"]+)\"", content, re.MULTILINE); print(match.group(1) if match else "")')"
+
+          if [ -z "${VERSION:-}" ]; then
+            echo "Could not resolve Cargo package version."
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $VERSION"
+
+      - name: Ensure release tags exist
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION_TAG="${{ steps.package.outputs.version_tag }}"
+          TARGET_SHA="$(git rev-parse HEAD)"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git rev-parse -q --verify "refs/tags/${VERSION_TAG}" >/dev/null; then
+            EXISTING_SHA="$(git rev-list -n 1 "${VERSION_TAG}")"
+
+            if [ "${EXISTING_SHA}" != "${TARGET_SHA}" ]; then
+              echo "::error::${VERSION_TAG} already exists at ${EXISTING_SHA}. Bump Cargo.toml package.version before publishing a new standalone executable release."
+              exit 1
+            fi
+
+            echo "Version tag ${VERSION_TAG} already points to ${TARGET_SHA}."
+          else
+            git tag "${VERSION_TAG}" "${TARGET_SHA}"
+            git push origin "refs/tags/${VERSION_TAG}"
+            echo "Created version tag ${VERSION_TAG} -> ${TARGET_SHA}."
+          fi
+
+          git tag -f latest "${TARGET_SHA}"
+          git push origin refs/tags/latest --force
+          echo "Updated latest -> ${VERSION_TAG} (${TARGET_SHA})."
+
+  build-standalone:
+    needs: resolve-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+
+    runs-on: ${{ matrix.os }}
+    env:
+      PACKAGE_NAME: tauri-release
+      RELEASE_BINS: "tauri-release cargo-tauri-release"
+      CARGO_RELEASE_BOOTSTRAP_MODE: "cargo-release-latest"
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-release.outputs.checkout_ref }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-release release tool
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cargo install --git https://github.com/verzly/cargo-release --tag latest --force
+          cargo-release --version
+
+      - name: Resolve host target
+        id: host
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          HOST="$(rustc -vV | awk '/^host: / {print $2}')"
+          EXT=""
+
+          if [ "${RUNNER_OS}" = "Windows" ]; then
+            EXT=".exe"
+          fi
+
+          echo "host=$HOST" >> "$GITHUB_OUTPUT"
+          echo "ext=$EXT" >> "$GITHUB_OUTPUT"
+          echo "Resolved host target: $HOST"
+
+      - name: Build standalone executables through cargo-release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ needs.resolve-release.outputs.version }}"
+          HOST="${{ steps.host.outputs.host }}"
+          EXT="${{ steps.host.outputs.ext }}"
+          PLATFORM="${{ matrix.platform }}"
+
+          rm -rf dist
+          mkdir -p dist/assets dist/work .github/release .cache/cargo-release/standalone
+
+          build_one() {
+            BIN="$1"
+            OUT_DIR="dist/work/${BIN}"
+            CONFIG=".github/release/${BIN}.standalone.cargo-release.toml"
+
+            cat > "${CONFIG}" <<EOF
+          [project]
+          project_dir = "."
+          package_name = "${PACKAGE_NAME}"
+          binary_name = "${BIN}"
+          version = "${VERSION}"
+          cargo_args = []
+
+          [container]
+          engine = "podman"
+          cache_dir = ".cache/cargo-release/standalone"
+          linux_image = "docker.io/library/ubuntu:22.04"
+          windows_image = "docker.io/library/ubuntu:22.04"
+          macos_image = "docker.io/joseluisq/rust-linux-darwin-builder:2.0.0-beta.1"
+          userns_keep_id = true
+
+          [output]
+          dir = "${OUT_DIR}"
+          clean = true
+          sha256 = false
+          manifest = false
+
+          [artifacts]
+          include_extensions = ["exe"]
+          include_files = []
+          keep_relative_paths = false
+
+          [linux]
+          enabled = true
+          strategy = "auto"
+          target = ["${HOST}"]
+          output_suffix = "standalone"
+
+          [windows]
+          enabled = true
+          strategy = "auto"
+          target = ["${HOST}"]
+          output_suffix = "standalone"
+
+          [macos]
+          enabled = true
+          strategy = "auto"
+          target = ["${HOST}"]
+          output_suffix = "standalone"
+          EOF
+
+            cargo-release build --config "${CONFIG}" "--${PLATFORM}" --verbose
+
+            SOURCE=""
+            while IFS= read -r candidate; do
+              base="$(basename "${candidate}")"
+              if [[ "${base}" == "${BIN}"* ]] && [[ "${base}" != *.sha256 ]] && [[ "${base}" != *.json ]]; then
+                SOURCE="${candidate}"
+                break
+              fi
+            done < <(find "${OUT_DIR}" -maxdepth 6 -type f | sort)
+
+            if [ -z "${SOURCE}" ]; then
+              echo "Could not find standalone executable for ${BIN} under ${OUT_DIR}."
+              find "${OUT_DIR}" -maxdepth 6 -type f -print || true
+              exit 1
+            fi
+
+            ASSET="${BIN}-v${VERSION}-${HOST}${EXT}"
+            cp "${SOURCE}" "dist/assets/${ASSET}"
+
+            if [ "${RUNNER_OS}" != "Windows" ]; then
+              chmod 755 "dist/assets/${ASSET}"
+            fi
+
+            if command -v sha256sum >/dev/null 2>&1; then
+              (cd dist/assets && sha256sum "${ASSET}" > "${ASSET}.sha256")
+            else
+              (cd dist/assets && shasum -a 256 "${ASSET}" > "${ASSET}.sha256")
+            fi
+          }
+
+          for BIN in ${RELEASE_BINS}; do
+            build_one "${BIN}"
+          done
+
+          find dist/assets -maxdepth 1 -type f -print | sort
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE_NAME }}-${{ matrix.platform }}
+          path: dist/assets/*
+          if-no-files-found: error
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.resolve-release.outputs.version_tag }}
+          name: ${{ needs.resolve-release.outputs.version_tag }}
+          files: dist/assets/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true
