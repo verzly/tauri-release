@@ -219,9 +219,48 @@ is_release_artifact() {{
 }}
 
 copy_count=0
-ARTIFACT_SOURCES=(".")
-if [ -n "${{CARGO_TARGET_DIR:-}}" ] && [ -d "${{CARGO_TARGET_DIR}}" ]; then
-  ARTIFACT_SOURCES+=("${{CARGO_TARGET_DIR}}")
+ARTIFACT_SOURCES=()
+
+add_source() {{
+  local source="$1"
+  if [ ! -d "$source" ]; then
+    return 0
+  fi
+
+  local existing
+  for existing in "${{ARTIFACT_SOURCES[@]}}"; do
+    if [ "$existing" = "$source" ]; then
+      return 0
+    fi
+  done
+
+  ARTIFACT_SOURCES+=("$source")
+}}
+
+add_tauri_bundle_sources() {{
+  local target_dir="$1"
+  add_source "$target_dir/release/bundle"
+
+  if [ -d "$target_dir" ]; then
+    local candidate
+    for candidate in "$target_dir"/*/release/bundle; do
+      add_source "$candidate"
+    done
+  fi
+}}
+
+if [ -n "${{CARGO_TARGET_DIR:-}}" ]; then
+  add_tauri_bundle_sources "$CARGO_TARGET_DIR"
+fi
+
+add_tauri_bundle_sources "src-tauri/target"
+
+if [ "$ARTIFACT_PLATFORM" = "android" ]; then
+  add_source "src-tauri/gen/android/app/build/outputs"
+fi
+
+if [ "$ARTIFACT_PLATFORM" = "ios" ]; then
+  add_source "src-tauri/gen/apple/build"
 fi
 
 copy_from_source() {{
@@ -255,8 +294,16 @@ for source in "${{ARTIFACT_SOURCES[@]}}"; do
   copy_from_source "$source"
 done
 
-if [ "$copy_count" -eq 0 ] && [ "$ARTIFACT_ALLOW_EMPTY" != "true" ]; then
-  echo "::error::No release artifacts were collected for $ARTIFACT_PLATFORM. Searched: ${{ARTIFACT_SOURCES[*]}}"
+existing_count=0
+while IFS= read -r -d '' existing_file; do
+  if is_release_artifact "$existing_file"; then
+    existing_count=$((existing_count + 1))
+  fi
+done < <(find /out -type f -print0)
+
+if [ "$existing_count" -eq 0 ] && [ "$copy_count" -eq 0 ] && [ "$ARTIFACT_ALLOW_EMPTY" != "true" ]; then
+  searched="${{ARTIFACT_SOURCES[*]:-none}}"
+  echo "::error::No release artifacts were collected for $ARTIFACT_PLATFORM. Searched: $searched"
   exit 1
 fi"#,
         platform = shell_quote(platform),
