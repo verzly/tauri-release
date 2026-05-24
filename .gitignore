@@ -1,0 +1,6 @@
+/target
+/dist
+/.cache
+/.tauri-release-work
+*.log
+.DS_Store
