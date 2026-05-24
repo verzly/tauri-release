@@ -1,0 +1,35 @@
+[project]
+project_dir = "apps/desktop"
+package_manager = "pnpm"
+
+[container]
+engine = "podman"
+linux_image = "localhost/tauri-release-linux:latest"
+android_image = "localhost/tauri-release-android:latest"
+
+[output]
+dir = "dist/tauri-release/desktop"
+clean = true
+sha256 = true
+manifest = true
+
+[linux]
+enabled = true
+bundles = ["appimage", "deb", "rpm"]
+
+[android]
+enabled = false
+
+[windows]
+enabled = false
+strategy = "host-only"
+command = "pnpm tauri build"
+
+[macos]
+enabled = false
+strategy = "host-only"
+command = "pnpm tauri build"
+
+[ios]
+enabled = false
+strategy = "host-only"

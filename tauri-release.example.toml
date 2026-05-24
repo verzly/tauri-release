@@ -1,0 +1,75 @@
+# tauri-release example configuration
+# The host project is mounted read-only into the container and copied into a disposable /work/project directory.
+# Only release artifacts are copied back to the output directory.
+
+[project]
+# For a plain Tauri project use ".".
+# For a monorepo use something like "apps/desktop" or "apps/mobile".
+project_dir = "."
+
+# Optional. Auto-detected from lockfiles when omitted: pnpm, npm, yarn, bun, cargo.
+# package_manager = "pnpm"
+
+# Optional. Overrides the default dependency install command inside the container.
+# install_command = "corepack enable && pnpm install --frozen-lockfile"
+
+# Optional metadata override. Normally detected from package.json, src-tauri/Cargo.toml or tauri.conf.json.
+# app_name = "nutrino"
+# version = "0.11.10"
+
+[project.env]
+# Tauri updater/private signing values can be injected from the caller's environment instead.
+# TAURI_SIGNING_PRIVATE_KEY = "..."
+# TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "..."
+
+[container]
+engine = "podman"
+linux_image = "ghcr.io/your-org/tauri-release-linux:latest"
+android_image = "ghcr.io/your-org/tauri-release-android:latest"
+userns_keep_id = true
+# cache_dir = ".cache/tauri-release"
+# network = "host"
+
+[output]
+# Defaults to dist/<version>.
+# dir = "dist/release"
+clean = true
+sha256 = true
+manifest = true
+
+[artifacts]
+include_extensions = ["AppImage", "deb", "rpm", "exe", "msi", "zip", "dmg", "apk", "aab", "ipa", "sig", "json"]
+include_files = ["latest.json", "release.json"]
+keep_relative_paths = false
+
+[linux]
+enabled = true
+bundles = ["appimage", "deb", "rpm"]
+# command = "pnpm tauri build --bundles appimage,deb,rpm"
+
+[android]
+enabled = true
+apk = true
+aab = true
+split_per_abi = false
+targets = ["aarch64"]
+# command = "pnpm tauri android build --ci --apk --aab --target aarch64"
+
+[windows]
+# Windows installer builds are intentionally host-only by default.
+# Use a Windows runner/host for MSI/NSIS/signing.
+enabled = false
+strategy = "host-only"
+command = "pnpm tauri build"
+
+[macos]
+# macOS bundles, signing and notarization require a macOS runner/host.
+enabled = false
+strategy = "host-only"
+command = "pnpm tauri build"
+
+[ios]
+# iOS builds require macOS + Xcode.
+enabled = false
+strategy = "host-only"
+command = "pnpm tauri ios build --ci"
