@@ -47,7 +47,7 @@ fn build_container(ctx: &BuildContext) -> Result<()> {
 {copy}
 "#,
         command = command(ctx),
-        copy = container::copy_artifact_script("ios")
+        copy = container::copy_artifact_script("ios", &ctx.config.artifacts)
     );
 
     container::run(ctx, ContainerRun::new(ctx, "ios", image, script))

@@ -384,12 +384,16 @@ jobs:
               --notes-file release-notes.md
           else
             gh release create "${VERSION_TAG}" \
+              --draft \
               --target "${TARGET_SHA}" \
               --title "${VERSION_TAG}" \
               --notes-file release-notes.md
           fi
 
           gh release upload "${VERSION_TAG}" dist/assets/* --clobber
+
+          RELEASE_ID="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${VERSION_TAG}" --jq '.id')"
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" -F draft=false >/dev/null
 
           for MOVING_TAG in latest "${MINOR_TAG}" "${MAJOR_TAG}"; do
             git tag -f "${MOVING_TAG}" "${TARGET_SHA}"

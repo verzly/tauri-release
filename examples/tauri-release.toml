@@ -39,9 +39,10 @@ sha256 = true
 manifest = true
 
 [artifacts]
-include_extensions = ["AppImage", "deb", "rpm", "exe", "msi", "zip", "dmg", "apk", "aab", "ipa", "sig", "json"]
-include_files = ["latest.json", "release.json"]
+include_extensions = ["AppImage", "deb", "rpm", "exe", "msi", "zip", "dmg", "apk", "aab", "ipa", "sig"]
+include_files = ["latest.json", "release.json", "release-manifest.json"]
 keep_relative_paths = false
+allow_empty = false
 
 [linux]
 enabled = true

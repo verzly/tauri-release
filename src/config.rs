@@ -116,6 +116,7 @@ pub struct ArtifactConfig {
     pub include_extensions: Vec<String>,
     pub include_files: Vec<String>,
     pub keep_relative_paths: bool,
+    pub allow_empty: bool,
 }
 
 impl Default for ArtifactConfig {
@@ -133,10 +134,10 @@ impl Default for ArtifactConfig {
                 "aab".into(),
                 "ipa".into(),
                 "sig".into(),
-                "json".into(),
             ],
-            include_files: vec!["latest.json".into(), "release.json".into()],
+            include_files: vec!["latest.json".into(), "release.json".into(), "release-manifest.json".into()],
             keep_relative_paths: false,
+            allow_empty: false,
         }
     }
 }

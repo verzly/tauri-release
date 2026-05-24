@@ -5,6 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+use crate::config::ArtifactConfig;
 use crate::context::BuildContext;
 use crate::util::{path_for_container, shell_quote};
 
@@ -44,12 +45,13 @@ pub fn run(ctx: &BuildContext, spec: ContainerRun) -> Result<()> {
     let cache = path_for_container(&ctx.cache_dir.join(&spec.platform));
     fs::create_dir_all(ctx.cache_dir.join(&spec.platform))?;
 
-    let mut args: Vec<String> = vec![
-        "run".into(),
-        "--rm".into(),
-        "--name".into(),
-        spec.name.clone(),
-    ];
+    let mut args: Vec<String> = vec!["run".into()];
+
+    if !ctx.args.keep_workdir {
+        args.push("--rm".into());
+    }
+
+    args.extend(["--name".into(), spec.name.clone()]);
 
     if ctx.config.container.userns_keep_id && ctx.engine.executable() == "podman" {
         args.push("--userns=keep-id".into());
@@ -125,6 +127,14 @@ pub fn run(ctx: &BuildContext, spec: ContainerRun) -> Result<()> {
         anyhow::bail!("container build failed for {}", spec.platform);
     }
 
+    if ctx.args.keep_workdir {
+        println!(
+            "{} kept container {} for inspection",
+            "hint:".yellow(),
+            spec.name
+        );
+    }
+
     Ok(())
 }
 
@@ -158,22 +168,90 @@ export PNPM_STORE_DIR="${{PNPM_STORE_DIR:-/cache/pnpm-store}}"
     )
 }
 
-pub fn copy_artifact_script(platform: &str) -> String {
-    let platform = shell_quote(platform);
+pub fn copy_artifact_script(platform: &str, config: &ArtifactConfig) -> String {
+    let extensions = config
+        .include_extensions
+        .iter()
+        .map(|ext| shell_quote(&ext.trim_start_matches('.').to_ascii_lowercase()))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let files = config
+        .include_files
+        .iter()
+        .map(|file| shell_quote(file))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let keep_relative_paths = if config.keep_relative_paths { "true" } else { "false" };
+    let allow_empty = if config.allow_empty { "true" } else { "false" };
+
     format!(
         r#"
 mkdir -p /out
-find . -type f \( \
-  -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.exe' -o -name '*.msi' \
-  -o -name '*.dmg' -o -name '*.zip' -o -name '*.apk' -o -name '*.aab' -o -name '*.ipa' \
-  -o -name '*.sig' -o -name 'latest.json' -o -name 'release.json' \
-\) -print0 | while IFS= read -r -d '' file; do
+ARTIFACT_PLATFORM={platform}
+ARTIFACT_KEEP_RELATIVE_PATHS={keep_relative_paths}
+ARTIFACT_ALLOW_EMPTY={allow_empty}
+ARTIFACT_EXTENSIONS=({extensions})
+ARTIFACT_FILES=({files})
+
+is_release_artifact() {{
+  local file="$1"
+  local base
   base="$(basename "$file")"
-  cp -f "$file" "/out/$base"
-  echo "artifact:{platform}:$base"
-done
+
+  local allowed_file
+  for allowed_file in "${{ARTIFACT_FILES[@]}}"; do
+    if [ "$base" = "$allowed_file" ]; then
+      return 0
+    fi
+  done
+
+  local lower_base
+  lower_base="$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')"
+
+  local ext
+  for ext in "${{ARTIFACT_EXTENSIONS[@]}}"; do
+    case "$lower_base" in
+      *."$ext"|*-"$ext") return 0 ;;
+    esac
+  done
+
+  return 1
+}}
+
+copy_count=0
+while IFS= read -r -d '' file; do
+  if ! is_release_artifact "$file"; then
+    continue
+  fi
+
+  rel="${{file#./}}"
+  if [ "$ARTIFACT_KEEP_RELATIVE_PATHS" = "true" ]; then
+    dest="/out/$rel"
+  else
+    dest="/out/$(basename "$file")"
+  fi
+
+  if [ -e "$dest" ]; then
+    echo "::error::Artifact collision: $file would overwrite $dest. Enable artifacts.keep_relative_paths or make artifact names unique."
+    exit 1
+  fi
+
+  mkdir -p "$(dirname "$dest")"
+  cp -f "$file" "$dest"
+  copy_count=$((copy_count + 1))
+  echo "artifact:$ARTIFACT_PLATFORM:${{dest#/out/}}"
+done < <(find . -type f -print0)
+
+if [ "$copy_count" -eq 0 ] && [ "$ARTIFACT_ALLOW_EMPTY" != "true" ]; then
+  echo "::error::No release artifacts were collected for $ARTIFACT_PLATFORM."
+  exit 1
+fi
 "#,
-        platform = platform
+        platform = shell_quote(platform),
+        keep_relative_paths = keep_relative_paths,
+        allow_empty = allow_empty,
+        extensions = extensions,
+        files = files,
     )
 }
 

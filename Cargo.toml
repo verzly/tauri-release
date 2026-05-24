@@ -1,6 +1,6 @@
 [package]
 name = "tauri-release"
-version = "0.1.20"
+version = "0.2.0"
 edition = "2021"
 description = "Containerized release builder for Tauri desktop and mobile artifacts"
 license = "AGPL-3.0-or-later"
