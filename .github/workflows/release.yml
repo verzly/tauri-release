@@ -328,12 +328,51 @@ jobs:
 
           find dist/assets -maxdepth 1 -type f ! -name '*.sha256' -exec chmod 755 {} \; || true
 
-          gh api \
-            --method POST \
-            "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
-            -f tag_name="${VERSION_TAG}" \
-            -f target_commitish="${TARGET_SHA}" \
-            --jq '.body' > release-notes.md
+          PREVIOUS_TAG="$(python3 - "${VERSION_TAG}" <<'PY'
+          import re
+          import subprocess
+          import sys
+
+          current = sys.argv[1].removeprefix("v")
+          current = re.split(r"[-+]", current, maxsplit=1)[0]
+          current_match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", current)
+
+          if not current_match:
+              sys.exit(0)
+
+          current_version = tuple(int(part) for part in current_match.groups())
+          tags = subprocess.check_output(["git", "tag", "--list"], text=True).splitlines()
+          candidates = []
+
+          for tag in tags:
+              match = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)", tag)
+              if not match:
+                  continue
+
+              version = tuple(int(part) for part in match.groups())
+              if version < current_version:
+                  candidates.append((version, tag))
+
+          if candidates:
+              print(max(candidates)[1])
+          PY
+          )"
+
+          GENERATE_NOTES_ARGS=(
+            --method POST
+            "repos/${GITHUB_REPOSITORY}/releases/generate-notes"
+            -f "tag_name=${VERSION_TAG}"
+            -f "target_commitish=${TARGET_SHA}"
+          )
+
+          if [ -n "${PREVIOUS_TAG}" ]; then
+            GENERATE_NOTES_ARGS+=( -f "previous_tag_name=${PREVIOUS_TAG}" )
+            echo "Generating release notes from ${PREVIOUS_TAG} to ${VERSION_TAG}."
+          else
+            echo "No previous full SemVer release tag found before ${VERSION_TAG}."
+          fi
+
+          gh api "${GENERATE_NOTES_ARGS[@]}" --jq '.body' > release-notes.md
 
           if [ ! -s release-notes.md ]; then
             echo "Release ${VERSION_TAG}" > release-notes.md
