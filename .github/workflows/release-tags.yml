@@ -131,4 +131,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          scripts/sync-release-notes.sh "${{ steps.package.outputs.version_tag }}"
+          bash scripts/sync-release-notes.sh "${{ steps.package.outputs.version_tag }}"

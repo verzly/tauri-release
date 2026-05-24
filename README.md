@@ -140,7 +140,7 @@ cargo install --git https://github.com/verzly/tauri-release --tag v0 --force
 Install a specific release tag when you need a reproducible tool version:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --tag v0.1.16 --force
+cargo install --git https://github.com/verzly/tauri-release --tag v0.1.17 --force
 ```
 
 Development branch installation is only recommended when contributing or testing unreleased changes:
@@ -176,8 +176,8 @@ The release assets are single executables, not project archives. Download the ex
 Asset names use this pattern:
 
 ```text
-tauri-release-v0.1.16-<rust-host-target>
-tauri-release-v0.1.16-<rust-host-target>.exe
+tauri-release-v0.1.17-<rust-host-target>
+tauri-release-v0.1.17-<rust-host-target>.exe
 ```
 
 Typical targets are:
@@ -191,7 +191,7 @@ aarch64-apple-darwin
 Linux/macOS example:
 
 ```sh
-curl -L -o tauri-release https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.16-x86_64-unknown-linux-gnu
+curl -L -o tauri-release https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.17-x86_64-unknown-linux-gnu
 chmod +x tauri-release
 ./tauri-release --help
 ```
@@ -199,7 +199,7 @@ chmod +x tauri-release
 Windows PowerShell example:
 
 ```powershell
-Invoke-WebRequest -Uri "https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.16-x86_64-pc-windows-msvc.exe" -OutFile "tauri-release.exe"
+Invoke-WebRequest -Uri "https://github.com/verzly/tauri-release/releases/latest/download/tauri-release-v0.1.17-x86_64-pc-windows-msvc.exe" -OutFile "tauri-release.exe"
 .\tauri-release.exe --help
 ```
 
@@ -287,7 +287,7 @@ cargo install --git https://github.com/verzly/tauri-release --tag latest --force
 Upgrade or pin to a specific release tag:
 
 ```sh
-cargo install --git https://github.com/verzly/tauri-release --tag v0.1.16 --force
+cargo install --git https://github.com/verzly/tauri-release --tag v0.1.17 --force
 ```
 
 Only use the development branch if you intentionally want unreleased changes:
