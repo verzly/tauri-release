@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [0.1.17] - 2026-05-24
+
+### Fixed
+
+- Fixed release note synchronization failing when helper scripts are checked out without executable permissions
+
 ## [0.1.16] - 2026-05-24
 
 ### Added
