@@ -219,34 +219,46 @@ is_release_artifact() {{
 }}
 
 copy_count=0
-while IFS= read -r -d '' file; do
-  if ! is_release_artifact "$file"; then
-    continue
-  fi
+ARTIFACT_SOURCES=(".")
+if [ -n "${{CARGO_TARGET_DIR:-}}" ] && [ -d "${{CARGO_TARGET_DIR}}" ]; then
+  ARTIFACT_SOURCES+=("${{CARGO_TARGET_DIR}}")
+fi
 
-  rel="${{file#./}}"
-  if [ "$ARTIFACT_KEEP_RELATIVE_PATHS" = "true" ]; then
-    dest="/out/$rel"
-  else
-    dest="/out/$(basename "$file")"
-  fi
+copy_from_source() {{
+  local source="$1"
+  while IFS= read -r -d '' file; do
+    if ! is_release_artifact "$file"; then
+      continue
+    fi
 
-  if [ -e "$dest" ]; then
-    echo "::error::Artifact collision: $file would overwrite $dest. Enable artifacts.keep_relative_paths or make artifact names unique."
-    exit 1
-  fi
+    rel="${{file#${{source}}/}}"
+    rel="${{rel#./}}"
+    if [ "$ARTIFACT_KEEP_RELATIVE_PATHS" = "true" ]; then
+      dest="/out/$rel"
+    else
+      dest="/out/$(basename "$file")"
+    fi
 
-  mkdir -p "$(dirname "$dest")"
-  cp -f "$file" "$dest"
-  copy_count=$((copy_count + 1))
-  echo "artifact:$ARTIFACT_PLATFORM:${{dest#/out/}}"
-done < <(find . -type f -print0)
+    if [ -e "$dest" ]; then
+      echo "::error::Artifact collision: $file would overwrite $dest. Enable artifacts.keep_relative_paths or make artifact names unique."
+      exit 1
+    fi
+
+    mkdir -p "$(dirname "$dest")"
+    cp -f "$file" "$dest"
+    copy_count=$((copy_count + 1))
+    echo "artifact:$ARTIFACT_PLATFORM:${{dest#/out/}}"
+  done < <(find "$source" -type f -print0)
+}}
+
+for source in "${{ARTIFACT_SOURCES[@]}}"; do
+  copy_from_source "$source"
+done
 
 if [ "$copy_count" -eq 0 ] && [ "$ARTIFACT_ALLOW_EMPTY" != "true" ]; then
-  echo "::error::No release artifacts were collected for $ARTIFACT_PLATFORM."
+  echo "::error::No release artifacts were collected for $ARTIFACT_PLATFORM. Searched: ${{ARTIFACT_SOURCES[*]}}"
   exit 1
-fi
-"#,
+fi"#,
         platform = shell_quote(platform),
         keep_relative_paths = keep_relative_paths,
         allow_empty = allow_empty,
